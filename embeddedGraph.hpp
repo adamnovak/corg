@@ -29,9 +29,9 @@ protected:
     // The thread set that the graph is embedded in.
     stPinchThreadSet* threadSet;
     
-    // The embedding, mapping from xg node ID to thread ID, start base,
+    // The embedding, mapping from xg node ID to thread, start base,
     // is reverse
-    std::map<int64_t, std::tuple<int64_t, int64_t, bool>> embedding;
+    std::map<int64_t, std::tuple<stPinchThread*, int64_t, bool>> embedding;
 
 
 };

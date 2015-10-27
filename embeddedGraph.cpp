@@ -17,18 +17,24 @@ EmbeddedGraph::EmbeddedGraph(const xg::XG& graph, stPinchThreadSet* threadSet): 
     // For every edge, if it's not implicit, make an "NN" staple and attach the nodes it wants together.
     
     for(size_t rank = 1; rank < graph.max_node_rank(); rank++) {
-        if(!graph.entity_is_node(rank)) {
-            // Skip anything that's not a node.
-            // TODO: what are these things?
-            continue;
-        }
         
-        size_t nodeRank = graph.entity_rank_as_node_rank(rank);
+        int64_t nodeId = graph.rank_to_id(rank);
         
-        int64_t nodeId = graph.rank_to_id(nodeRank);
+        // Pull out the node's sequence, just for the length
+        std::string sequence = graph.node_sequence(nodeId);
         
-        std::cout << "Node: " << nodeId << ": " << graph.node_sequence(nodeId) << std::endl;
+        std::cout << "Node: " << nodeId << ": " << sequence << std::endl;
+        
+        // Add a thread
+        // TODO: find a free thread name, because graph IDs may overlap.
+        stPinchThread* thread = stPinchThreadSet_addThread(threadSet, nodeId, 0, sequence.size());
+        
+        // TODO: for now just give every node its own thread.
+        embedding[nodeId] = std::make_tuple(thread, 0, false);
     }
+    
+    // TODO: Now do the edge staples.
+    
 
 }
 
