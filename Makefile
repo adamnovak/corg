@@ -8,6 +8,8 @@ LDFLAGS=-lm -lpthread $(LDSEARCH)
 LIBXG=ekg/xg/libxg.a
 LIBPROTOBUF=ekg/xg/stream/protobuf/libprotobuf.a
 LIBSDSL=ekg/xg/sdsl-lite/build/lib/libsdsl.a
+LIBPINCHESANDCACTI=benedictpaten/sonLib/lib/stPinchesAndCacti.a
+LIBSONLIB=benedictpaten/sonLib/lib/sonLib.a
 
 all: main
 
@@ -17,11 +19,18 @@ $(LIBPROTOBUF): $(LIBXG)
 
 $(LIBXG):
 	cd ekg/xg && $(MAKE) libxg.a
+	
+# This builds out to the sonLib lib directory for some reason
+$(LIBPINCHESANDCACTI): $(LIBSONLIB)
+	cd benedictpaten/pinchesAndCacti && $(MAKE)
+
+$(LIBSONLIB):
+	cd benedictpaten/sonLib && $(MAKE)
 
 # Needs XG to be built for the protobuf headers
 main.o: $(LIBXG)
 
-main: main.o $(LIBXG) $(LIBSDSL)
+main: main.o $(LIBXG) $(LIBSDSL) $(LIBPINCHESANDCACTI) $(LIBSONLIB)
 	$(CXX) $^ -o $@ $(CXXFLAGS) $(LDFLAGS)
 
 clean:
