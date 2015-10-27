@@ -1,0 +1,1 @@
+os: {arch: 64bit, family: Linux, subfamily: CentOS, version: '6.6'}

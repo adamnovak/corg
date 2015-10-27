@@ -1,0 +1,9 @@
+[submodule "benedictpaten/sonLib"]
+	path = benedictpaten/sonLib
+	url = https://github.com/benedictpaten/sonLib.git
+[submodule "benedictpaten/pinchesAndCacti"]
+	path = benedictpaten/pinchesAndCacti
+	url = https://github.com/benedictpaten/pinchesAndCacti.git
+[submodule "ekg/xg"]
+	path = ekg/xg
+	url = https://github.com/ekg/xg.git
