@@ -30,7 +30,7 @@ $(LIBSONLIB):
 # Needs XG to be built for the protobuf headers
 main.o: $(LIBXG)
 
-main: main.o $(LIBXG) $(LIBSDSL) $(LIBPINCHESANDCACTI) $(LIBSONLIB) $(LIBPROTOBUF)
+main: main.o embeddedGraph.o $(LIBXG) $(LIBSDSL) $(LIBPINCHESANDCACTI) $(LIBSONLIB) $(LIBPROTOBUF)
 	$(CXX) $^ -o $@ $(CXXFLAGS) $(LDFLAGS)
 
 clean:

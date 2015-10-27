@@ -6,6 +6,8 @@
 
 #include "ekg/xg/xg.hpp"
 
+#include "embeddedGraph.hpp"
+
 // Hack around stupid name mangling issues
 extern "C" {
     #include "benedictpaten/pinchesAndCacti/inc/stPinchGraphs.h"
@@ -83,11 +85,11 @@ int main(int argc, char** argv) {
     // And the second
     xg::XG xg2(xgStream2);
     
-    // Load up an XG
-    
-    xg::XG testxg;
-    
+    // Make a thread set
     auto threadset = stPinchThreadSet_construct();
+    
+    // Add in each xg graph to the thread set
+    coregraph::EmbeddedGraph embedding1(xg1, threadset);
     
     stPinchThreadSet_destruct(threadset);
     
