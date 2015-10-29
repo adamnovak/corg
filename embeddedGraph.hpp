@@ -5,7 +5,7 @@
 #include <map>
 #include <utility>
 
-#include "ekg/xg/xg.hpp"
+#include "ekg/vg/vg.hpp"
 
 // Hack around stupid name mangling issues
 extern "C" {
@@ -15,7 +15,7 @@ extern "C" {
 namespace coregraph {
 
 /**
- * Represents an xg graph that has been embedded in a pinch graph, as a series
+ * Represents a vg graph that has been embedded in a pinch graph, as a series
  * of pinched-together threads.
  */
 class EmbeddedGraph {
@@ -24,7 +24,7 @@ public:
      * Construct an embedding of the given graph in the given thread set. Needs
      * a function that can produce unique novel sequence names.
      */
-    EmbeddedGraph(const xg::XG& graph, stPinchThreadSet* threadSet, std::function<int64_t(void)> getId);
+    EmbeddedGraph(const vg::VG& graph, stPinchThreadSet* threadSet, std::function<int64_t(void)> getId);
     
     /**
      * Trace out common paths between this embedded graph and the other graph
@@ -40,8 +40,8 @@ public:
     static void threadSetToGraphs(stPinchThreadSet* threadSet, std::function<void(vg::Graph)> callback);
     
 protected:
-    // The succinct graph we came from (which keeps track of the path data)
-    const xg::XG& graph;
+    // The graph we came from (which keeps track of the path data)
+    const vg::VG& graph;
 
     // The thread set that the graph is embedded in.
     stPinchThreadSet* threadSet;

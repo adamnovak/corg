@@ -5,7 +5,7 @@
 
 namespace coregraph {
 
-EmbeddedGraph::EmbeddedGraph(const xg::XG& graph, stPinchThreadSet* threadSet,
+EmbeddedGraph::EmbeddedGraph(const vg::VG& graph, stPinchThreadSet* threadSet,
     std::function<int64_t(void)> getId): graph(graph), threadSet(threadSet) {
     // We need to construct some embedding of xg nodes in a pinch graph.
 
@@ -20,75 +20,64 @@ EmbeddedGraph::EmbeddedGraph(const xg::XG& graph, stPinchThreadSet* threadSet,
     // After doing that for all the nodes, turn all remaining nodes into their own threads.
     // For every edge, if it's not implicit, make an "NN" staple and attach the nodes it wants together.
     
-    for(size_t rank = 1; rank <= graph.max_node_rank(); rank++) {
-        
-        int64_t nodeId = graph.rank_to_id(rank);
-        
-        // Pull out the node's sequence, just for the length
-        std::string sequence = graph.node_sequence(nodeId);
-        
-        std::cout << "Node: " << nodeId << ": " << sequence << std::endl;
+    graph.for_each_node([&](vg::Node* node) {
+    
+        std::cout << "Node: " << node->id() << ": " << node->sequence() << std::endl;
         
         // Add a thread
-        stPinchThread* thread = stPinchThreadSet_addThread(threadSet, getId(), 0, sequence.size());
+        stPinchThread* thread = stPinchThreadSet_addThread(threadSet, getId(), 0, node->sequence().size());
         
         // TODO: for now just give every node its own thread.
-        embedding[nodeId] = std::make_tuple(thread, 0, false);
-    }
+        embedding[node->id()] = std::make_tuple(thread, 0, false);
     
-    for(size_t rank = 1; rank <= graph.max_node_rank(); rank++) {
-        // Now look at the edges on every node        
-        int64_t nodeId = graph.rank_to_id(rank);
+    });
+    
+    graph.for_each_edge([&](vg::Edge* edge) {
+                
+        // Attach the nodes as specified by the edges
+                
+        // Make a 2-base staple sequence
+        stPinchThread* thread = stPinchThreadSet_addThread(threadSet, getId(), 0, 2);
         
-        std::vector<vg::Edge> edges = graph.edges_of(nodeId);
+        // Unpack the tuples describing the embeddings
+        stPinchThread* thread1, *thread2;
+        int64_t offset1, offset2;
+        bool isReverse1, isReverse2;
         
-        for(auto edge : edges) {
-            if(nodeId == std::min(edge.from(), edge.to())) {
-                // Only look at edges from the lowest-ID node.
-                
-                // Make a 2-base staple sequence
-                stPinchThread* thread = stPinchThreadSet_addThread(threadSet, getId(), 0, 2);
-                
-                // Unpack the tuples describing the embeddings
-                stPinchThread* thread1, *thread2;
-                int64_t offset1, offset2;
-                bool isReverse1, isReverse2;
-                
-                std::tie(thread1, offset1, isReverse1) = embedding.at(edge.from());
-                std::tie(thread2, offset2, isReverse2) = embedding.at(edge.to());
-                
-                // Adapt these to point to the sequence ends we want to weld together.
-                // They start out pointing to the starts
-                
-                if(!edge.from_start()) {
-                    // Move the thread1 set to the end
-                    offset1 += (stPinchThread_getLength(thread1) - 1) * (isReverse1 ? -1 : 1);
-                    isReverse1 = !isReverse1;
-                }
-                
-                if(edge.to_end()) {
-                    // Move the thread2 set to the end
-                    offset2 += (stPinchThread_getLength(thread2) - 1) * (isReverse2 ? -1 : 1);
-                    isReverse2 = !isReverse2;
-                }
-                
-                // Do the welding
-                stPinchThread_pinch(thread, thread1, 0, offset1, 1, isReverse1);
-                stPinchThread_pinch(thread, thread2, 1, offset2, 1, isReverse2);
-            }
+        std::tie(thread1, offset1, isReverse1) = embedding.at(edge->from());
+        std::tie(thread2, offset2, isReverse2) = embedding.at(edge->to());
+        
+        // Adapt these to point to the sequence ends we want to weld together.
+        // They start out pointing to the starts
+        
+        if(!edge.from_start()) {
+            // Move the thread1 set to the end
+            offset1 += (stPinchThread_getLength(thread1) - 1) * (isReverse1 ? -1 : 1);
+            isReverse1 = !isReverse1;
         }
-    }
+        
+        if(edge.to_end()) {
+            // Move the thread2 set to the end
+            offset2 += (stPinchThread_getLength(thread2) - 1) * (isReverse2 ? -1 : 1);
+            isReverse2 = !isReverse2;
+        }
+        
+        // Do the welding
+        stPinchThread_pinch(thread, thread1, 0, offset1, 1, isReverse1);
+        stPinchThread_pinch(thread, thread2, 1, offset2, 1, isReverse2);
+    });
 }
 
 void EmbeddedGraph::pinchWith(const EmbeddedGraph& other) {
     // Look for common path names
     std::set<std::string> ourPaths;
-    for(size_t rank = 1; rank <= graph.max_path_rank(); rank++) {
-        ourPaths.insert(graph.path_name(rank));
+    
+    graph.paths.for_each([&](vg::Path& path) {
+        ourPaths.insert(path.name());
     }
     std::set<std::string> sharedPaths;
-    for(size_t rank = 1; rank <= other.graph.max_path_rank(); rank++) {
-        std::string pathName = other.graph.path_name(rank);
+    other.graph.paths.for_each([&](vg::Path& path) {
+        std::string pathName = path.name();
         if(ourPaths.count(pathName)) {
             sharedPaths.insert(pathName);
         }
@@ -97,34 +86,36 @@ void EmbeddedGraph::pinchWith(const EmbeddedGraph& other) {
     for(std::string pathName : sharedPaths) {
         // We zip along every shared path
     
-        // Now we go through the two paths side by side. We advance in lock-step
-        // along the path, base by base. If either graph changes to a new node, find
-        // the range over which the new node and the (new or existing) node in the
-        // other graph overlap, and do a pinch.
-        
-        // How long is this path?
-        size_t pathLength = graph.path_length(pathName);
-        
-        if(other.graph.path_length(pathName) != pathLength) {
-            // Complain if it isn't consistent
-            throw std::runtime_error("Path lengths do not match for path: " + pathName);
-        }
-        
-        // What node ID are we on currently in each graph?
-        int64_t ourNode = 0;
-        int64_t theirNode = 0;
-        
-        // What nodes were we on at the previous path position?
-        int64_t ourLastNodeId = 0;
-        int64_t theirLastNodeId = 0;
-        
-        for(size_t i = 0; i < pathLength; i++) {
-            // Look up what node is here
-            ourNode = graph.node_at_path_position(pathName, i);
-            theirNode = other.graph.node_at_path_position(pathName, i);
+        // Get the mappings
+        std::list<Mapping>& ourPath = graph.paths.get_path(pathName);
+        std::list<Mapping>& theirPath = other.graph.paths.get_path(pathName);
+    
+        std::list<Mapping>::iterator ourMapping = ourPath.begin();
+        std::list<Mapping>::iterator theirMapping = ourPath.begin();
+    
+        while(ourMapping != ourPath.end() && theirMapping != theirPath.end()) {
+            // Go along the two paths.
             
-            vg::Path path = graph.path(pathName);
+            // Make sure the mappings are perfect matches
+            
+            // See how long our mapping is and how long their mapping is
+            
+            // See how much they overlap (start and length in each mapping)
+            
+            // Figure out where that overlapped region is in each graph (start, length, and orientation in each mapping's node)
+            
+            // Convert those to start length, and orientation in each mapping's thread
+            
+            // Pinch the threads
+            
+            // Advance the mapping that ends first, or, if both end at the same place, advance both
+            
+            // If you hit the end of one path before the end of the other, complain 
+        
         }
+        
+        // We should reach the end at the same time
+        
         
     }
 }
