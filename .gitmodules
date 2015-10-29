@@ -4,6 +4,3 @@
 [submodule "benedictpaten/pinchesAndCacti"]
 	path = benedictpaten/pinchesAndCacti
 	url = https://github.com/benedictpaten/pinchesAndCacti.git
-[submodule "ekg/xg"]
-	path = ekg/xg
-	url = https://github.com/ekg/xg.git
