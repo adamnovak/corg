@@ -1,7 +1,7 @@
 .PHONY: all clean
 
 CXX=g++
-INCLUDES=Iekg/vg -Iekg/vg/xg -Iekg/vg/xg/sdsl-lite/build/include -Ibenedictpaten/sonLib/C/inc
+INCLUDES=-Iekg/vg -Iekg/vg/xg -Iekg/vg/xg/sdsl-lite/build/include -Ibenedictpaten/sonLib/C/inc
 CXXFLAGS=-O3 -std=c++11 -fopenmp -g $(INCLUDES)
 LDSEARCH=-Lekg/vg -Lekg/vg/xg -Lekg/vg/xg/sdsl-lite/build/lib -Lekg/vg/xg/sdsl-lite/build/external/libdivsufsort/lib
 LDFLAGS=-lm -lpthread -lz -ldivsufsort -ldivsufsort64 $(LDSEARCH)
