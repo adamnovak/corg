@@ -85,11 +85,21 @@ int main(int argc, char** argv) {
     // And the second
     xg::XG xg2(xgStream2);
     
+    
+    // Make a way to track IDs
+    int64_t nextId = 1;
+    std::function<int64_t(void)> getId = [&]() {
+        return nextId++;
+    };
+    
     // Make a thread set
     auto threadset = stPinchThreadSet_construct();
     
     // Add in each xg graph to the thread set
-    coregraph::EmbeddedGraph embedding1(xg1, threadset);
+    coregraph::EmbeddedGraph embedding1(xg1, threadset, getId);
+    coregraph::EmbeddedGraph embedding2(xg2, threadset, getId);
+    
+    // Trace the paths and merge the embedded graphs.
     
     stPinchThreadSet_destruct(threadset);
     

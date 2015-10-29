@@ -21,11 +21,28 @@ namespace coregraph {
 class EmbeddedGraph {
 public:
     /**
-     * Construct an embedding of the given graph in the given thread set.
+     * Construct an embedding of the given graph in the given thread set. Needs
+     * a function that can produce unique novel sequence names.
      */
-    EmbeddedGraph(const xg::XG& graph, stPinchThreadSet* threadSet);
+    EmbeddedGraph(const xg::XG& graph, stPinchThreadSet* threadSet, std::function<int64_t(void)> getId);
+    
+    /**
+     * Trace out common paths between this embedded graph and the other graph
+     * embedded in the same stPinchThreadSet and pinch together.
+     */
+    void pinchWith(const EmbeddedGraph& other);
+    
+    /**
+     * Convert a pinch thread set to a VG graph, broken up into several protobuf
+     * Graph objects, of suitable size for serialization. Graph objects are
+     * streamed out through the callback.
+     */
+    static void threadSetToGraphs(stPinchThreadSet* threadSet, std::function<void(vg::Graph)> callback);
     
 protected:
+    // The succinct graph we came from (which keeps track of the path data)
+    const xg::XG& graph;
+
     // The thread set that the graph is embedded in.
     stPinchThreadSet* threadSet;
     
