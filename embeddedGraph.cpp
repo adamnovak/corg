@@ -5,7 +5,7 @@
 
 namespace coregraph {
 
-EmbeddedGraph::EmbeddedGraph(const vg::VG& graph, stPinchThreadSet* threadSet,
+EmbeddedGraph::EmbeddedGraph(vg::VG& graph, stPinchThreadSet* threadSet,
     std::function<int64_t(void)> getId): graph(graph), threadSet(threadSet) {
     // We need to construct some embedding of xg nodes in a pinch graph.
 
@@ -50,13 +50,13 @@ EmbeddedGraph::EmbeddedGraph(const vg::VG& graph, stPinchThreadSet* threadSet,
         // Adapt these to point to the sequence ends we want to weld together.
         // They start out pointing to the starts
         
-        if(!edge.from_start()) {
+        if(!edge->from_start()) {
             // Move the thread1 set to the end
             offset1 += (stPinchThread_getLength(thread1) - 1) * (isReverse1 ? -1 : 1);
             isReverse1 = !isReverse1;
         }
         
-        if(edge.to_end()) {
+        if(edge->to_end()) {
             // Move the thread2 set to the end
             offset2 += (stPinchThread_getLength(thread2) - 1) * (isReverse2 ? -1 : 1);
             isReverse2 = !isReverse2;
@@ -68,30 +68,30 @@ EmbeddedGraph::EmbeddedGraph(const vg::VG& graph, stPinchThreadSet* threadSet,
     });
 }
 
-void EmbeddedGraph::pinchWith(const EmbeddedGraph& other) {
+void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
     // Look for common path names
     std::set<std::string> ourPaths;
     
-    graph.paths.for_each([&](vg::Path& path) {
+    graph.paths.for_each([&](vg::Path& path) { 
         ourPaths.insert(path.name());
-    }
+    });
     std::set<std::string> sharedPaths;
-    other.graph.paths.for_each([&](vg::Path& path) {
+    other.graph.paths.for_each([&](vg::Path& path) { 
         std::string pathName = path.name();
         if(ourPaths.count(pathName)) {
             sharedPaths.insert(pathName);
         }
-    }
+    });
     
     for(std::string pathName : sharedPaths) {
         // We zip along every shared path
     
         // Get the mappings
-        std::list<Mapping>& ourPath = graph.paths.get_path(pathName);
-        std::list<Mapping>& theirPath = other.graph.paths.get_path(pathName);
+        std::list<vg::Mapping>& ourPath = graph.paths.get_path(pathName);
+        std::list<vg::Mapping>& theirPath = other.graph.paths.get_path(pathName);
     
-        std::list<Mapping>::iterator ourMapping = ourPath.begin();
-        std::list<Mapping>::iterator theirMapping = ourPath.begin();
+        std::list<vg::Mapping>::iterator ourMapping = ourPath.begin();
+        std::list<vg::Mapping>::iterator theirMapping = ourPath.begin();
     
         while(ourMapping != ourPath.end() && theirMapping != theirPath.end()) {
             // Go along the two paths.

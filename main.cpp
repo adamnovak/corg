@@ -4,7 +4,7 @@
 #include <fstream>
 #include <getopt.h>
 
-#include "ekg/xg/xg.hpp"
+#include "ekg/vg/vg.hpp"
 
 #include "embeddedGraph.hpp"
 
@@ -14,7 +14,7 @@ extern "C" {
 }
 
 void help_main(char** argv) {
-    std::cerr << "usage: " << argv[0] << " [options] XGFILE XGFILE" << std::endl
+    std::cerr << "usage: " << argv[0] << " [options] VGFILE VGFILE" << std::endl
         << "Compute the core graph from two graphs" << std::endl
         << std::endl
         << "options:" << std::endl
@@ -63,27 +63,27 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    // Pull out the XG file names
-    std::string xgFile1 = argv[optind++];
-    std::string xgFile2 = argv[optind++];
+    // Pull out the VG file names
+    std::string vgFile1 = argv[optind++];
+    std::string vgFile2 = argv[optind++];
     
     // Open the files
-    std::ifstream xgStream1(xgFile1);
-    if(!xgStream1.good()) {
-        std::cerr << "Could not read " << xgFile1 << std::endl;
+    std::ifstream vgStream1(vgFile1);
+    if(!vgStream1.good()) {
+        std::cerr << "Could not read " << vgFile1 << std::endl;
         exit(1);
     }
     
-    std::ifstream xgStream2(xgFile2);
-    if(!xgStream2.good()) {
-        std::cerr << "Could not read " << xgFile2 << std::endl;
+    std::ifstream vgStream2(vgFile2);
+    if(!vgStream2.good()) {
+        std::cerr << "Could not read " << vgFile2 << std::endl;
         exit(1);
     }
     
-    // Load up the first XG file
-    xg::XG xg1(xgStream1);
+    // Load up the first VG file
+    vg::VG vg1(vgStream1);
     // And the second
-    xg::XG xg2(xgStream2);
+    vg::VG vg2(vgStream2);
     
     
     // Make a way to track IDs
@@ -95,9 +95,9 @@ int main(int argc, char** argv) {
     // Make a thread set
     auto threadset = stPinchThreadSet_construct();
     
-    // Add in each xg graph to the thread set
-    coregraph::EmbeddedGraph embedding1(xg1, threadset, getId);
-    coregraph::EmbeddedGraph embedding2(xg2, threadset, getId);
+    // Add in each vg graph to the thread set
+    coregraph::EmbeddedGraph embedding1(vg1, threadset, getId);
+    coregraph::EmbeddedGraph embedding2(vg2, threadset, getId);
     
     // Trace the paths and merge the embedded graphs.
     

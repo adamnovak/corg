@@ -24,13 +24,13 @@ public:
      * Construct an embedding of the given graph in the given thread set. Needs
      * a function that can produce unique novel sequence names.
      */
-    EmbeddedGraph(const vg::VG& graph, stPinchThreadSet* threadSet, std::function<int64_t(void)> getId);
+    EmbeddedGraph(vg::VG& graph, stPinchThreadSet* threadSet, std::function<int64_t(void)> getId);
     
     /**
      * Trace out common paths between this embedded graph and the other graph
      * embedded in the same stPinchThreadSet and pinch together.
      */
-    void pinchWith(const EmbeddedGraph& other);
+    void pinchWith(EmbeddedGraph& other);
     
     /**
      * Convert a pinch thread set to a VG graph, broken up into several protobuf
@@ -41,7 +41,7 @@ public:
     
 protected:
     // The graph we came from (which keeps track of the path data)
-    const vg::VG& graph;
+    vg::VG& graph;
 
     // The thread set that the graph is embedded in.
     stPinchThreadSet* threadSet;
