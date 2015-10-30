@@ -14,83 +14,140 @@ extern "C" {
 }
 
 /**
+ * Get the leader for a pinch segment: either the first segment in its block, or
+ * the segment itself if it has no block.
+ */
+stPinchSegment* getLeader(stPinchSegment* segment) {
+    // See if the segment is in a block
+    auto block = stPinchSegment_getBlock(segment);
+    
+    // Get the leader segment: first in the block, or this segment if no block
+    auto leader = block ? stPinchBlock_getFirst(block) : segment;
+    
+    return leader;
+}
+
+/*
+ * Return false if a segment is not in a block or is forward in its block, and
+ * true otherwise.
+ */
+bool getOrientation(stPinchSegment* segment) {
+
+    auto block = stPinchSegment_getBlock(segment);
+    
+    return block ? stPinchSegment_getBlockOrientation(segment) : false;
+
+}
+
+/**
  * Create a VG grpah from a pinch thread set.
  */
 vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& threadSequences) {
     // Make an empty graph
     vg::VG graph;
     
-    // Remember what nodes have been created for what blocks
-    std::map<stPinchBlock*, vg::Node*> nodeForBlock;
+    // Remember what nodes have been created for what segments.
+    // Only the first segment in a block gets a node.
+    std::map<stPinchSegment*, vg::Node*> nodeForBlock;
     
     std::cerr << "Making pinch graph into vg graph with " << threadSequences.size() << " relevant threads" << std::endl;
     
     // This is the cleverest way to loop over Benedict's iterators.
-    auto blockIterator = stPinchThreadSet_getBlockIt(threadSet);
-    while(auto block = stPinchThreadSetBlockIt_getNext(&blockIterator)) {
-        // For every block of merged segments, we need to make a VG node.
+    auto segmentIterator = stPinchThreadSet_getSegmentIt(threadSet);
+    while(auto segment = stPinchThreadSetSegmentIt_getNext(&segmentIterator)) {
+        // For every segment, we need to make a VG node for it or its block (if
+        // it has one).
         
-        std::cerr << "Found block " << block << std::endl;
+        std::cerr << "Found segment " << segment << std::endl;
         
-        // Get the sequence by scanning through for the first sequence that
-        // isn't all Ns, if any.
-        auto segmentIterator = stPinchBlock_getSegmentIterator(block);
-        while(auto segment = stPinchBlockIt_getNext(&segmentIterator)) {
-            if(!threadSequences.count(stPinchSegment_getName(segment))) {
-                // This segment is part of a staple. Pass it up
-                continue;
+        // See if the segment is in a block
+        auto block = stPinchSegment_getBlock(segment);
+        
+        // Get the leader segment: first in the block, or this segment if no block
+        auto leader = getLeader(segment);
+        
+        if(nodeForBlock.count(leader)) {
+            // A node has already been made for this block.
+            continue;
+        }
+        
+        // Otherwise, we need the sequence
+        std::string sequence;
+        
+        if(block) {
+            // Get the sequence by scanning through the block for the first sequence
+            // that isn't all Ns, if any.
+            auto segmentIterator = stPinchBlock_getSegmentIterator(block);
+            while(auto sequenceSegment = stPinchBlockIt_getNext(&segmentIterator)) {
+                if(!threadSequences.count(stPinchSegment_getName(sequenceSegment))) {
+                    // This segment is part of a staple. Pass it up
+                    continue;
+                }
+                
+                // Go get the sequence of the thread, and clip out the part relevant to this segment.
+                sequence = threadSequences.at(stPinchSegment_getName(sequenceSegment)).substr(
+                    stPinchSegment_getStart(sequenceSegment), stPinchSegment_getLength(sequenceSegment));
+                    
+                // If necessary, flip the segment around
+                if(getOrientation(sequenceSegment)) {
+                    sequence = vg::reverse_complement(sequence);
+                }
+                
+                if(std::count(sequence.begin(), sequence.end(), 'N') +
+                    std::count(sequence.begin(), sequence.end(), 'n') < sequence.size()) {\
+                    
+                    // The sequence has some non-N characters
+                    // If it's not all Ns, break
+                    break;
+                }
+                
+                // Otherwise try the next segment
             }
-            
-            // Go get the sequence of the thread, and clip out the part relevant to this segment.
-            std::string sequence = threadSequences.at(stPinchSegment_getName(segment)).substr(
+        } else {
+            // Just pull the sequence from the lone segment
+            sequence = threadSequences.at(stPinchSegment_getName(segment)).substr(
                 stPinchSegment_getStart(segment), stPinchSegment_getLength(segment));
                 
-            // If necessary, flip the segment around
-            if(stPinchSegment_getBlockOrientation(segment)) {
-                sequence = vg::reverse_complement(sequence);
-            }
-            
-            // Make a node in the graph to represent the block
-            vg::Node* node = graph.create_node(sequence);
-            
-            // Remember it
-            nodeForBlock[block] = node;
-            
-            std::cerr << "Made node: " << pb2json(*node) << std::endl;
-            
-            // We don't need to see any more segments for this block
-            break;
+            // It doesn't need to flip, since it can't be backwards in a block
         }
+        
+            
+        // Make a node in the graph to represent the block
+        vg::Node* node = graph.create_node(sequence);
+        
+        // Remember it
+        nodeForBlock[leader] = node;
+        
+        std::cerr << "Made node: " << pb2json(*node) << std::endl;
+            
     }
     
-    // Now go through the blocks again and wire them up.
-    blockIterator = stPinchThreadSet_getBlockIt(threadSet);
-    while(auto block = stPinchThreadSetBlockIt_getNext(&blockIterator)) {
-        // For every block of merged segments, we have a vg node already
-        // TODO: There can't be any free-floating staples.
-        auto node = nodeForBlock.at(block);
+    // Now go through the segments again and wire them up.
+    segmentIterator = stPinchThreadSet_getSegmentIt(threadSet);
+    while(auto segment = stPinchThreadSetSegmentIt_getNext(&segmentIterator)) {
+        std::cerr << "Revisited segment: " << segment << std::endl;
         
-        std::cerr << "Revisited block: " << block << std::endl;
+        // See if the segment is in a block
+        auto block = stPinchSegment_getBlock(segment);
         
-        // Get the sequence by scanning through for the first sequence that
-        // isn't all Ns, if any.
-        auto segmentIterator = stPinchBlock_getSegmentIterator(block);
-        while(auto segment = stPinchBlockIt_getNext(&segmentIterator)) {
-            if(!threadSequences.count(stPinchSegment_getName(segment))) {
-                // This segment is part of a staple. Pass it up
-                continue;
-            }
+        // Get the leader segment: first in the block, or this segment if no block
+        auto leader = getLeader(segment);
+        
+        // We know we have a node already
+        auto node = nodeForBlock.at(leader);
             
-            // What orientation is this node in for the purposes of this edge
-            auto orientation = stPinchSegment_getBlockOrientation(segment);
-            
-            // Look at the segment 5' of here. We know it's not a staple and
-            // thus has a vg node.
-            auto prevSegment = stPinchSegment_get5Prime(segment);
-            
+        // What orientation is this node in for the purposes of this edge
+        // TODO: ought to always be false if the segment isn't in a block. Is this true?
+        auto orientation = getOrientation(segment);
+        
+        // Look at the segment 5' of here. We know it's not a staple and
+        // thus has a vg node.
+        auto prevSegment = stPinchSegment_get5Prime(segment);
+        
+        if(prevSegment) {
             // Get the node IDs and orientations
-            auto prevNode = nodeForBlock.at(stPinchSegment_getBlock(prevSegment));
-            auto prevOrientation = stPinchSegment_getBlockOrientation(prevSegment);
+            auto prevNode = nodeForBlock.at(getLeader(prevSegment));
+            auto prevOrientation = getOrientation(prevSegment);
             
             // Make an edge
             vg::Edge prevEdge;
@@ -103,12 +160,14 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
             graph.add_edge(prevEdge);
             
             std::cerr << "Made edge: " << pb2json(prevEdge) << std::endl;
-            
-            // Now do the same thing for the 3' side
-            auto nextSegment = stPinchSegment_get3Prime(segment);
-            
+        }
+        
+        // Now do the same thing for the 3' side
+        auto nextSegment = stPinchSegment_get3Prime(segment);
+        
+        if(nextSegment) {
             // Get the node IDs and orientations
-            auto nextNode = nodeForBlock.at(stPinchSegment_getBlock(nextSegment));
+            auto nextNode = nodeForBlock.at(getLeader(nextSegment));
             auto nextOrientation = stPinchSegment_getBlockOrientation(nextSegment);
             
             // Make an edge
