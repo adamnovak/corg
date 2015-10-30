@@ -22,9 +22,11 @@ class EmbeddedGraph {
 public:
     /**
      * Construct an embedding of the given graph in the given thread set. Needs
-     * a function that can produce unique novel sequence names.
+     * a place to deposit the sequences for the new threads it creates, and a
+     * function that can produce unique novel sequence names.
      */
-    EmbeddedGraph(vg::VG& graph, stPinchThreadSet* threadSet, std::function<int64_t(void)> getId);
+    EmbeddedGraph(vg::VG& graph, stPinchThreadSet* threadSet, std::map<int64_t, std::string>& threadSequences, 
+        std::function<int64_t(void)> getId);
     
     /**
      * Trace out common paths between this embedded graph and the other graph

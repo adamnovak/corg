@@ -6,6 +6,7 @@
 namespace coregraph {
 
 EmbeddedGraph::EmbeddedGraph(vg::VG& graph, stPinchThreadSet* threadSet,
+    std::map<int64_t, std::string>& threadSequences,
     std::function<int64_t(void)> getId): graph(graph), threadSet(threadSet) {
     // We need to construct some embedding of xg nodes in a pinch graph.
 
@@ -22,10 +23,13 @@ EmbeddedGraph::EmbeddedGraph(vg::VG& graph, stPinchThreadSet* threadSet,
     
     graph.for_each_node([&](vg::Node* node) {
     
-        std::cout << "Node: " << node->id() << ": " << node->sequence() << std::endl;
+        std::cerr << "Node: " << node->id() << ": " << node->sequence() << std::endl;
         
         // Add a thread
-        stPinchThread* thread = stPinchThreadSet_addThread(threadSet, getId(), 0, node->sequence().size());
+        int64_t threadName = getId();
+        stPinchThread* thread = stPinchThreadSet_addThread(threadSet, threadName, 0, node->sequence().size());
+        // Copy over its sequence
+        threadSequences[threadName] = node->sequence();
         
         // TODO: for now just give every node its own thread.
         embedding[node->id()] = std::make_tuple(thread, 0, false);
@@ -130,7 +134,7 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
         std::list<vg::Mapping>& theirPath = other.graph.paths.get_path(pathName);
     
         std::list<vg::Mapping>::iterator ourMapping = ourPath.begin();
-        std::list<vg::Mapping>::iterator theirMapping = ourPath.begin();
+        std::list<vg::Mapping>::iterator theirMapping = theirPath.begin();
         
         // Keep track of where we are alogn each path, so we can get mapping
         // overlap
@@ -226,12 +230,31 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
         
         }
         
+        auto ourEnd = ourPath.end();
+        auto theirEnd = theirPath.end();
+        
+        if(ourMapping == ourEnd) { 
+            std::cerr << "We are at our end" << std::endl;
+        } else {
+            std::cerr << "Our mapping is reverse? " << (*ourMapping).is_reverse() << std::endl;
+        }
+        
+        if(theirMapping == theirEnd) { 
+            std::cerr << "They are at their end" << std::endl;
+        } else {
+            std::cerr << "Their mapping is reverse? " << (*theirMapping).is_reverse() << std::endl;
+        }
+        
         if((ourMapping == ourPath.end()) != (theirMapping == theirPath.end())) {
+            std::cerr << "We ran out of path in one graph and not in the other!" << std::endl;
+            
             if(ourMapping != ourPath.end()) {
+                std::cerr << "We have a mapping" << std::endl;
                 std::cerr << "Our mapping: " << pb2json(*ourMapping) << std::endl;
             }
             
             if(theirMapping != theirPath.end()) {
+                std::cerr << "They have a mapping" << std::endl;
                 std::cerr << "Their mapping: " << pb2json(*theirMapping) << std::endl;
             }
             
