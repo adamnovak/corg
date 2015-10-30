@@ -71,7 +71,7 @@ EmbeddedGraph::EmbeddedGraph(vg::VG& graph, stPinchThreadSet* threadSet,
 /**
  * Return true if a mapping is a perfect match, and false if it isn't.
  */
-bool mapping_is_perfect_match(const vg::Mapping& mapping) {
+bool mappingIsPerfectMatch(const vg::Mapping& mapping) {
     for (auto edit : mapping.edit()) {
         if (edit.from_length() != edit.to_length() || !edit.sequence().empty()) {
             // This edit isn't a perfect match
@@ -79,8 +79,32 @@ bool mapping_is_perfect_match(const vg::Mapping& mapping) {
         }
     }
     
-    // If we get here, all the edits are perfect matches
+    // If we get here, all the edits are perfect matches.
+    // Note that Mappings with no edits at all are full-length perfect matches.
     return true;
+}
+
+/**
+ * Return the (from) length of a Mapping, even if thgat Mapping has no edits
+ * (and is implicitly a full-length perfect match). Requires the graph that the
+ * Mapping is to.
+ */
+int64_t mappingLength(const vg::Mapping& mapping, vg::VG& graph) {
+    if(mapping.edit_size() == 0) {
+        // There are no edits so we just use the (remaining) length of the node.
+        
+         if(mapping.is_reverse()) {
+            // We take the part left of its offset. We don't even need the node.
+            return mapping.position().offset();
+        } else {
+            // We take the part at and right of the offset
+            int64_t nodeLength = graph.get_node(mapping.position().node_id())->sequence().size();
+            return nodeLength - mapping.position().offset();       
+       }
+    } else {
+        // There are edits so just refer to them
+        return vg::mapping_from_length(mapping);
+    }
 }
 
 void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
@@ -124,12 +148,12 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
             std::cerr << "Their mapping: " << pb2json(*theirMapping) << std::endl;
             
             // Make sure the mappings are perfect matches
-            assert(mapping_is_perfect_match(*ourMapping));
-            assert(mapping_is_perfect_match(*theirMapping));
+            assert(mappingIsPerfectMatch(*ourMapping));
+            assert(mappingIsPerfectMatch(*theirMapping));
             
             // See how long our mapping is and how long their mapping is
-            int64_t ourMappingLength = vg::mapping_from_length(*ourMapping);
-            int64_t theirMappingLength = vg::mapping_from_length(*theirMapping);
+            int64_t ourMappingLength = mappingLength(*ourMapping, graph);
+            int64_t theirMappingLength = mappingLength(*theirMapping, other.graph);
             
             std::cerr << "Our mapping is " << ourMappingLength << " bases on node " << (*ourMapping).position().node_id() <<
                 " offset " << (*ourMapping).position().offset() << " orientation " << (*ourMapping).is_reverse() << std::endl;
@@ -139,6 +163,8 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
             // See how much they overlap (start and length in each mapping)
             if(ourPathBase < theirPathBase + theirMappingLength &&
                 theirPathBase < ourPathBase + ourMappingLength) {
+                
+                std::cerr << "The mappings overlap" << std::endl;
                 
                 // The two ranges do overlap
                 // Find their first base
@@ -157,7 +183,7 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
                 bool ourIsReverse, theirIsReverse;
                 
                 std::tie(ourThread, ourOffset, ourIsReverse) = embedding.at((*ourMapping).position().node_id());
-                std::tie(theirThread, theirOffset, theirIsReverse) = embedding.at((*theirMapping).position().node_id());
+                std::tie(theirThread, theirOffset, theirIsReverse) = other.embedding.at((*theirMapping).position().node_id());
                 
                 // Advance by the offset in the node at which the mapping starts
                 ourOffset += (*ourMapping).position().offset() * (ourIsReverse ? -1 : 1);
@@ -173,6 +199,11 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
                 // themselves, cause us to pinch in opposite orientations.
                 stPinchThread_pinch(ourThread, theirThread, ourOffset, theirOffset, overlapLength,
                     ourIsReverse != (*ourMapping).is_reverse() != theirIsReverse != (*theirMapping).is_reverse());
+                    
+                std::cerr << "Pinched thread " << stPinchThread_getName(ourThread) << ":" << ourOffset << " and " << 
+                    stPinchThread_getName(theirThread) << ":" << theirOffset << " for " << overlapLength <<
+                    " bases in orientation " <<
+                    (ourIsReverse != (*ourMapping).is_reverse() != theirIsReverse != (*theirMapping).is_reverse()) << std::endl;
                 
             }
             
@@ -182,11 +213,13 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
                 // We end first, so advance us
                 ourPathBase = minNextBase;
                 ++ourMapping;
+                std::cerr << "Advanced in our thread" << std::endl;
             }
             if(theirPathBase + theirMappingLength == minNextBase) {
                 // They end first, so advance them
                 theirPathBase = minNextBase;
                 ++theirMapping;
+                std::cerr << "Advanced in their thread" << std::endl;
             }
             
             // If you hit the end of one path before the end of the other, complain 
@@ -194,6 +227,14 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
         }
         
         if((ourMapping == ourPath.end()) != (theirMapping == theirPath.end())) {
+            if(ourMapping != ourPath.end()) {
+                std::cerr << "Our mapping: " << pb2json(*ourMapping) << std::endl;
+            }
+            
+            if(theirMapping != theirPath.end()) {
+                std::cerr << "Their mapping: " << pb2json(*theirMapping) << std::endl;
+            }
+            
             // We should reach the end at the same time, but we didn't
             throw std::runtime_error("Ran out of mappings on one path before the other!");
         }
