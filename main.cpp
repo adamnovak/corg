@@ -100,7 +100,10 @@ int main(int argc, char** argv) {
     coregraph::EmbeddedGraph embedding2(vg2, threadset, getId);
     
     // Trace the paths and merge the embedded graphs.
+    embedding1.pinchWith(embedding2);
     
+    // Tear everything down. TODO: can we somehow run this destruction function
+    // after all our other, potentially depending locals are destructed?
     stPinchThreadSet_destruct(threadset);
     
     return 0;
