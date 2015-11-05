@@ -22,9 +22,9 @@ EmbeddedGraph::EmbeddedGraph(vg::VG& graph, stPinchThreadSet* threadSet,
     // For every edge, if it's not implicit, make an "NN" staple and attach the nodes it wants together.
     
     graph.for_each_node([&](vg::Node* node) {
-    
+#ifdef debug
         std::cerr << "Node: " << node->id() << ": " << node->sequence() << std::endl;
-        
+#endif
         // Add a thread
         int64_t threadName = getId();
         stPinchThread* thread = stPinchThreadSet_addThread(threadSet, threadName, 0, node->sequence().size());
@@ -73,11 +73,15 @@ EmbeddedGraph::EmbeddedGraph(vg::VG& graph, stPinchThreadSet* threadSet,
         // join, so we need to flip the orientation of one of them. Also, pinch
         // graphs use 0 for the relatively backward orientation, so we invert
         // here. We still report the orientations the VG way.
+#ifdef debug
         std::cerr << "Welding 0 on staple to " << offset1 << " on " << stPinchThread_getName(thread1) <<
             " in orientation " << (isEnd1 ? "forward" : "reverse") << std::endl;
+#endif
         stPinchThread_pinch(thread, thread1, 0, offset1, 1, isEnd1);
+#ifdef debug
         std::cerr << "Welding 1 on staple to " << offset2 << " on " << stPinchThread_getName(thread2) <<
             " in orientation " << (isEnd2 ? "reverse" : "forward") << std::endl;
+#endif
         stPinchThread_pinch(thread, thread2, 1, offset2, 1, !isEnd2);
     });
 }
@@ -155,11 +159,12 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
     
         while(ourMapping != ourPath.end() && theirMapping != theirPath.end()) {
             // Go along the two paths.
-            
+#ifdef debug
             std::cerr << "At " << ourPathBase << " in graph 1, " << theirPathBase << " in graph 2." << std::endl;
             
             std::cerr << "Our mapping: " << pb2json(*ourMapping) << std::endl;
             std::cerr << "Their mapping: " << pb2json(*theirMapping) << std::endl;
+#endif
             
             // Make sure the mappings are perfect matches
             assert(mappingIsPerfectMatch(*ourMapping));
@@ -168,17 +173,20 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
             // See how long our mapping is and how long their mapping is
             int64_t ourMappingLength = mappingLength(*ourMapping, graph);
             int64_t theirMappingLength = mappingLength(*theirMapping, other.graph);
-            
+
+#ifdef debug
             std::cerr << "Our mapping is " << ourMappingLength << " bases on node " << (*ourMapping).position().node_id() <<
                 " offset " << (*ourMapping).position().offset() << " orientation " << (*ourMapping).is_reverse() << std::endl;
             std::cerr << "Their mapping is " << theirMappingLength << " bases on node " << (*theirMapping).position().node_id() <<
                 " offset " << (*theirMapping).position().offset() << " orientation " << (*theirMapping).is_reverse() << std::endl;
-            
+#endif
+
             // See how much they overlap (start and length in each mapping)
             if(ourPathBase < theirPathBase + theirMappingLength &&
                 theirPathBase < ourPathBase + ourMappingLength) {
-                
+#ifdef debug
                 std::cerr << "The mappings overlap" << std::endl;
+#endif
                 
                 // The two ranges do overlap
                 // Find their first base
@@ -218,10 +226,11 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
                 
                 // Pinch the threads, making sure to convert to pinch graph orientations, which are backward.
                 stPinchThread_pinch(ourThread, theirThread, ourOffset, theirOffset, overlapLength, !relativeOrientation);
-                    
+#ifdef debug
                 std::cerr << "Pinched thread " << stPinchThread_getName(ourThread) << ":" << ourOffset << " and " << 
                     stPinchThread_getName(theirThread) << ":" << theirOffset << " for " << overlapLength <<
                     " bases in orientation " << (relativeOrientation ? "reverse" : "forward") << std::endl;
+#endif
                 
             }
             
@@ -231,13 +240,17 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
                 // We end first, so advance us
                 ourPathBase = minNextBase;
                 ++ourMapping;
+#ifdef debug
                 std::cerr << "Advanced in our thread" << std::endl;
+#endif
             }
             if(theirPathBase + theirMappingLength == minNextBase) {
                 // They end first, so advance them
                 theirPathBase = minNextBase;
                 ++theirMapping;
+#ifdef debug
                 std::cerr << "Advanced in their thread" << std::endl;
+#endif
             }
             
             // If you hit the end of one path before the end of the other, complain 
@@ -246,18 +259,6 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
         
         auto ourEnd = ourPath.end();
         auto theirEnd = theirPath.end();
-        
-        if(ourMapping == ourEnd) { 
-            std::cerr << "We are at our end" << std::endl;
-        } else {
-            std::cerr << "Our mapping is reverse? " << (*ourMapping).is_reverse() << std::endl;
-        }
-        
-        if(theirMapping == theirEnd) { 
-            std::cerr << "They are at their end" << std::endl;
-        } else {
-            std::cerr << "Their mapping is reverse? " << (*theirMapping).is_reverse() << std::endl;
-        }
         
         if((ourMapping == ourPath.end()) != (theirMapping == theirPath.end())) {
             std::cerr << "We ran out of path in one graph and not in the other!" << std::endl;

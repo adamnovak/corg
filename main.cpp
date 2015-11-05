@@ -59,7 +59,9 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
         // For every segment, we need to make a VG node for it or its block (if
         // it has one).
         
+#ifdef debug
         std::cerr << "Found segment " << segment << std::endl;
+#endif
         
         // See if the segment is in a block
         auto block = stPinchSegment_getBlock(segment);
@@ -118,8 +120,9 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
         
         // Remember it
         nodeForLeader[leader] = node;
-        
+#ifdef debug
         std::cerr << "Made node: " << pb2json(*node) << std::endl;
+#endif
             
     }
     
@@ -138,9 +141,10 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
         // What orientation is this node in for the purposes of this edge
         // TODO: ought to always be false if the segment isn't in a block. Is this true?
         auto orientation = getOrientation(segment);
-        
+#ifdef debug
         std::cerr << "Revisited segment: " << segment << " for node " << node->id() <<
             " in orientation " << (orientation ? "reverse" : "forward") << std::endl;
+#endif
         
         // Look at the segment 5' of here. We know it's not a staple and
         // thus has a vg node.
@@ -150,9 +154,10 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
             // Get the node IDs and orientations
             auto prevNode = nodeForLeader.at(getLeader(prevSegment));
             auto prevOrientation = getOrientation(prevSegment);
-            
+#ifdef debug
             std::cerr << "Found prev node " << prevNode->id() << " in orientation " << 
                 (prevOrientation ? "reverse" : "forward") << std::endl;
+#endif
             
             // Make an edge
             vg::Edge prevEdge;
@@ -163,8 +168,9 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
             
             // Add it in. vg::VG deduplicates for us
             graph.add_edge(prevEdge);
-            
+#ifdef debug
             std::cerr << "Made edge: " << pb2json(prevEdge) << std::endl;
+#endif
         }
         
         // Now do the same thing for the 3' side
@@ -174,9 +180,10 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
             // Get the node IDs and orientations
             auto nextNode = nodeForLeader.at(getLeader(nextSegment));
             auto nextOrientation = getOrientation(nextSegment);
-            
+#ifdef debug
             std::cerr << "Found next node " << nextNode->id() << " in orientation " << 
                 (nextOrientation ? "reverse" : "forward") << std::endl;
+#endif
             
             // Make an edge
             vg::Edge nextEdge;
@@ -187,8 +194,9 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
             
             // Add it in. vg::VG deduplicates for us
             graph.add_edge(nextEdge);
-            
+#ifdef debug
             std::cerr << "Made edge: " << pb2json(nextEdge) << std::endl;
+#endif
         }
     }
     
