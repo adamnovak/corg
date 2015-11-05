@@ -1,0 +1,21 @@
+{
+    "node": [
+        {"id": 1, "sequence": "A"},
+        {"id": 2, "sequence": "T"},
+        {"id": 3, "sequence": "C"}
+    ],
+    "edge": [
+        {"from": 1, "to": 2},
+        {"from": 2, "to": 3}
+    ],
+    "path": [
+        {
+            "name": "thepath",
+            "mapping": [
+                {"position": {"node_id": 1}, "rank": 1},
+                {"position": {"node_id": 2}, "rank": 2},
+                {"position": {"node_id": 3}, "rank": 3}
+            ]
+        }
+    ]
+}
