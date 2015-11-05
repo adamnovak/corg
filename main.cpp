@@ -29,13 +29,13 @@ stPinchSegment* getLeader(stPinchSegment* segment) {
 
 /*
  * Return false if a segment is not in a block or is forward in its block, and
- * true otherwise.
+ * true otherwise. Converts from pinch graph orientations to vg orientations.
  */
 bool getOrientation(stPinchSegment* segment) {
 
     auto block = stPinchSegment_getBlock(segment);
     
-    return block ? stPinchSegment_getBlockOrientation(segment) : false;
+    return block ? !stPinchSegment_getBlockOrientation(segment) : false;
 
 }
 
@@ -46,9 +46,10 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
     // Make an empty graph
     vg::VG graph;
     
-    // Remember what nodes have been created for what segments.
-    // Only the first segment in a block gets a node.
-    std::map<stPinchSegment*, vg::Node*> nodeForBlock;
+    // Remember what nodes have been created for what segments. Only the first
+    // segment in a block (the "leader") gets a node. Segments without blocks
+    // are also themselves leaders and get nodes.
+    std::map<stPinchSegment*, vg::Node*> nodeForLeader;
     
     std::cerr << "Making pinch graph into vg graph with " << threadSequences.size() << " relevant threads" << std::endl;
     
@@ -66,7 +67,7 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
         // Get the leader segment: first in the block, or this segment if no block
         auto leader = getLeader(segment);
         
-        if(nodeForBlock.count(leader)) {
+        if(nodeForLeader.count(leader)) {
             // A node has already been made for this block.
             continue;
         }
@@ -116,7 +117,7 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
         vg::Node* node = graph.create_node(sequence);
         
         // Remember it
-        nodeForBlock[leader] = node;
+        nodeForLeader[leader] = node;
         
         std::cerr << "Made node: " << pb2json(*node) << std::endl;
             
@@ -125,8 +126,6 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
     // Now go through the segments again and wire them up.
     segmentIterator = stPinchThreadSet_getSegmentIt(threadSet);
     while(auto segment = stPinchThreadSetSegmentIt_getNext(&segmentIterator)) {
-        std::cerr << "Revisited segment: " << segment << std::endl;
-        
         // See if the segment is in a block
         auto block = stPinchSegment_getBlock(segment);
         
@@ -134,11 +133,14 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
         auto leader = getLeader(segment);
         
         // We know we have a node already
-        auto node = nodeForBlock.at(leader);
-            
+        auto node = nodeForLeader.at(leader);
+        
         // What orientation is this node in for the purposes of this edge
         // TODO: ought to always be false if the segment isn't in a block. Is this true?
         auto orientation = getOrientation(segment);
+        
+        std::cerr << "Revisited segment: " << segment << " for node " << node->id() <<
+            " in orientation " << (orientation ? "reverse" : "forward") << std::endl;
         
         // Look at the segment 5' of here. We know it's not a staple and
         // thus has a vg node.
@@ -146,8 +148,11 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
         
         if(prevSegment) {
             // Get the node IDs and orientations
-            auto prevNode = nodeForBlock.at(getLeader(prevSegment));
+            auto prevNode = nodeForLeader.at(getLeader(prevSegment));
             auto prevOrientation = getOrientation(prevSegment);
+            
+            std::cerr << "Found prev node " << prevNode->id() << " in orientation " << 
+                (prevOrientation ? "reverse" : "forward") << std::endl;
             
             // Make an edge
             vg::Edge prevEdge;
@@ -167,8 +172,11 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
         
         if(nextSegment) {
             // Get the node IDs and orientations
-            auto nextNode = nodeForBlock.at(getLeader(nextSegment));
-            auto nextOrientation = stPinchSegment_getBlockOrientation(nextSegment);
+            auto nextNode = nodeForLeader.at(getLeader(nextSegment));
+            auto nextOrientation = getOrientation(nextSegment);
+            
+            std::cerr << "Found next node " << nextNode->id() << " in orientation " << 
+                (nextOrientation ? "reverse" : "forward") << std::endl;
             
             // Make an edge
             vg::Edge nextEdge;

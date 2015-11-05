@@ -43,32 +43,42 @@ EmbeddedGraph::EmbeddedGraph(vg::VG& graph, stPinchThreadSet* threadSet,
         // Make a 2-base staple sequence
         stPinchThread* thread = stPinchThreadSet_addThread(threadSet, getId(), 0, 2);
         
-        // Unpack the tuples describing the embeddings
+        // Unpack the tuples describing the embeddings, so we're holding thread,
+        // offset, is-end-of-the-node-and-not-start tuples representing the two
+        // sides to weld together.
         stPinchThread* thread1, *thread2;
         int64_t offset1, offset2;
-        bool isReverse1, isReverse2;
+        bool isEnd1, isEnd2; // These are basically !from_start and to_end
         
-        std::tie(thread1, offset1, isReverse1) = embedding.at(edge->from());
-        std::tie(thread2, offset2, isReverse2) = embedding.at(edge->to());
+        std::tie(thread1, offset1, isEnd1) = embedding.at(edge->from());
+        std::tie(thread2, offset2, isEnd2) = embedding.at(edge->to());
         
         // Adapt these to point to the sequence ends we want to weld together.
-        // They start out pointing to the starts
+        // They start out pointing to the low ends, which are the starts if the
+        // nodes are not embedded in reverse, and the ends otherwise.
         
         if(!edge->from_start()) {
             // Move the thread1 set to the end
-            offset1 += (stPinchThread_getLength(thread1) - 1) * (isReverse1 ? -1 : 1);
-            isReverse1 = !isReverse1;
+            offset1 += (stPinchThread_getLength(thread1) - 1) * (isEnd1 ? -1 : 1);
+            isEnd1 = !isEnd1;
         }
         
         if(edge->to_end()) {
             // Move the thread2 set to the end
-            offset2 += (stPinchThread_getLength(thread2) - 1) * (isReverse2 ? -1 : 1);
-            isReverse2 = !isReverse2;
+            offset2 += (stPinchThread_getLength(thread2) - 1) * (isEnd2 ? -1 : 1);
+            isEnd2 = !isEnd2;
         }
         
-        // Do the welding
-        stPinchThread_pinch(thread, thread1, 0, offset1, 1, isReverse1);
-        stPinchThread_pinch(thread, thread2, 1, offset2, 1, isReverse2);
+        // Do the welding. We're holding the ends looking outwards from the
+        // join, so we need to flip the orientation of one of them. Also, pinch
+        // graphs use 0 for the relatively backward orientation, so we invert
+        // here. We still report the orientations the VG way.
+        std::cerr << "Welding 0 on staple to " << offset1 << " on " << stPinchThread_getName(thread1) <<
+            " in orientation " << (isEnd1 ? "forward" : "reverse") << std::endl;
+        stPinchThread_pinch(thread, thread1, 0, offset1, 1, isEnd1);
+        std::cerr << "Welding 1 on staple to " << offset2 << " on " << stPinchThread_getName(thread2) <<
+            " in orientation " << (isEnd2 ? "reverse" : "forward") << std::endl;
+        stPinchThread_pinch(thread, thread2, 1, offset2, 1, !isEnd2);
     });
 }
 
@@ -199,15 +209,19 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
                 ourOffset += (overlapStart - ourPathBase) * (ourIsReverse != (*ourMapping).is_reverse() ? -1 : 1);
                 theirOffset += (overlapStart - theirPathBase) * (theirIsReverse != (*theirMapping).is_reverse() ? -1 : 1);
                 
-                // Pinch the threads, xor-ing all the flags that could, by
-                // themselves, cause us to pinch in opposite orientations.
-                stPinchThread_pinch(ourThread, theirThread, ourOffset, theirOffset, overlapLength,
-                    ourIsReverse != (*ourMapping).is_reverse() != theirIsReverse != (*theirMapping).is_reverse());
+                // Should we pinch the things relatively forward (0) or
+                // relatively reverse (1)? Calculated by xor-ing all the flags
+                // that could, by themselves, cause us to pinch in opposite
+                // orientations.
+                bool relativeOrientation = (ourIsReverse != (*ourMapping).is_reverse() != 
+                    theirIsReverse != (*theirMapping).is_reverse());
+                
+                // Pinch the threads, making sure to convert to pinch graph orientations, which are backward.
+                stPinchThread_pinch(ourThread, theirThread, ourOffset, theirOffset, overlapLength, !relativeOrientation);
                     
                 std::cerr << "Pinched thread " << stPinchThread_getName(ourThread) << ":" << ourOffset << " and " << 
                     stPinchThread_getName(theirThread) << ":" << theirOffset << " for " << overlapLength <<
-                    " bases in orientation " <<
-                    (ourIsReverse != (*ourMapping).is_reverse() != theirIsReverse != (*theirMapping).is_reverse()) << std::endl;
+                    " bases in orientation " << (relativeOrientation ? "reverse" : "forward") << std::endl;
                 
             }
             
