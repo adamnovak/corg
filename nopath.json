@@ -1,0 +1,11 @@
+{
+    "node": [
+        {"id": 1, "sequence": "A"},
+        {"id": 2, "sequence": "T"},
+        {"id": 3, "sequence": "C"}
+    ],
+    "edge": [
+        {"from": 1, "to": 2},
+        {"from": 2, "to": 3}
+    ]
+}

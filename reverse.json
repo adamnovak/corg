@@ -1,0 +1,13 @@
+{
+    "node": [
+        {"id": 1, "sequence": "GATTACA"}
+    ],
+    "path": [
+        {
+            "name": "thepath",
+            "mapping": [
+                {"position": {"node_id": 1, "offset": 6}, "rank": 1, "is_reverse": true}
+            ]
+        }
+    ]
+}

@@ -3,6 +3,8 @@
 #include <vector>
 #include <set>
 
+#define debug
+
 namespace coregraph {
 
 EmbeddedGraph::EmbeddedGraph(vg::VG& graph, stPinchThreadSet* threadSet,
@@ -113,7 +115,8 @@ int64_t mappingLength(const vg::Mapping& mapping, vg::VG& graph) {
         
          if(mapping.is_reverse()) {
             // We take the part left of its offset. We don't even need the node.
-            return mapping.position().offset();
+            // But we account for the 0-based-ness of the coordinates.
+            return mapping.position().offset() + 1;
         } else {
             // We take the part at and right of the offset
             int64_t nodeLength = graph.get_node(mapping.position().node_id())->sequence().size();
@@ -184,10 +187,6 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
             // See how much they overlap (start and length in each mapping)
             if(ourPathBase < theirPathBase + theirMappingLength &&
                 theirPathBase < ourPathBase + ourMappingLength) {
-#ifdef debug
-                std::cerr << "The mappings overlap" << std::endl;
-#endif
-                
                 // The two ranges do overlap
                 // Find their first base
                 int64_t overlapStart = std::max(ourPathBase, theirPathBase);
@@ -196,6 +195,10 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
                     theirPathBase + theirMappingLength);    
                 // How long soes that make the overlap?
                 int64_t overlapLength = overlapEnd - overlapStart;
+                
+#ifdef debug
+                std::cerr << "The mappings overlap for " << overlapLength << " bp" << std::endl;
+#endif
                 
                 // Figure out where that overlapped region is in each graph
                 // (start, length, and orientation in each mapping's node).
@@ -217,20 +220,34 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
                 ourOffset += (overlapStart - ourPathBase) * (ourIsReverse != (*ourMapping).is_reverse() ? -1 : 1);
                 theirOffset += (overlapStart - theirPathBase) * (theirIsReverse != (*theirMapping).is_reverse() ? -1 : 1);
                 
+                // Pull back to the actual start of the overlap in thread
+                // coordinates if it is going backward on the thread in question
+                // from the mapping's start position. The -1 accounts for the
+                // inclusiveness of the original end coordinate, and going to an
+                // end-exclusive system.
+                if(ourIsReverse != (*ourMapping).is_reverse()) {
+                    ourOffset -= overlapLength - 1;
+                }
+                if(theirIsReverse != (*theirMapping).is_reverse()) {
+                    theirOffset -= overlapLength - 1;
+                }
+                
                 // Should we pinch the things relatively forward (0) or
                 // relatively reverse (1)? Calculated by xor-ing all the flags
                 // that could, by themselves, cause us to pinch in opposite
                 // orientations.
                 bool relativeOrientation = (ourIsReverse != (*ourMapping).is_reverse() != 
                     theirIsReverse != (*theirMapping).is_reverse());
-                
-                // Pinch the threads, making sure to convert to pinch graph orientations, which are backward.
-                stPinchThread_pinch(ourThread, theirThread, ourOffset, theirOffset, overlapLength, !relativeOrientation);
+
 #ifdef debug
-                std::cerr << "Pinched thread " << stPinchThread_getName(ourThread) << ":" << ourOffset << " and " << 
+                std::cerr << "Pinch thread " << stPinchThread_getName(ourThread) << ":" << ourOffset << " and " << 
                     stPinchThread_getName(theirThread) << ":" << theirOffset << " for " << overlapLength <<
                     " bases in orientation " << (relativeOrientation ? "reverse" : "forward") << std::endl;
 #endif
+                
+                // Pinch the threads, making sure to convert to pinch graph orientations, which are backward.
+                stPinchThread_pinch(ourThread, theirThread, ourOffset, theirOffset, overlapLength, !relativeOrientation);
+
                 
             }
             

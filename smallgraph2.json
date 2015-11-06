@@ -1,0 +1,30 @@
+{
+    "node": [
+        {"id": 1, "sequence": "A"},
+        {"id": 2, "sequence": "TTA"},
+        {"id": 3, "sequence": "C"},
+        {"id": 4, "sequence": "T"},
+        {"id": 5, "sequence": "GGT"},
+        {"id": 6, "sequence": "C"}
+    ],
+    "edge": [
+        {"from": 1, "to": 2},
+        {"from": 2, "to": 3},
+        {"from": 4, "to": 2, "from_start": true, "to_end": true},
+        {"from": 3, "to": 5, "to_end": true},
+        {"from": 5, "to": 4, "to_end": true},
+        {"from": 5, "to": 6, "from_start": true}
+    ],
+    "path": [
+        {
+            "name": "thepath",
+            "mapping": [
+                {"position": {"node_id": 1}, "rank": 1},
+                {"position": {"node_id": 2}, "rank": 2},
+                {"position": {"node_id": 3}, "rank": 3},
+                {"position": {"node_id": 5}, "rank": 4, "is_reverse": true},
+                {"position": {"node_id": 6}, "rank": 5}
+            ]
+        }
+    ]
+}

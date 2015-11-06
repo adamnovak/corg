@@ -1,7 +1,7 @@
 {
     "node": [
         {"id": 1, "sequence": "A"},
-        {"id": 2, "sequence": "T"},
+        {"id": 2, "sequence": "TTACACC"},
         {"id": 3, "sequence": "C"}
     ],
     "edge": [
