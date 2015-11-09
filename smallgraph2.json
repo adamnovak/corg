@@ -22,7 +22,7 @@
                 {"position": {"node_id": 1}, "rank": 1},
                 {"position": {"node_id": 2}, "rank": 2},
                 {"position": {"node_id": 3}, "rank": 3},
-                {"position": {"node_id": 5}, "rank": 4, "is_reverse": true},
+                {"position": {"node_id": 5, "offset": 2}, "rank": 4, "is_reverse": true},
                 {"position": {"node_id": 6}, "rank": 5}
             ]
         }
