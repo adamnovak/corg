@@ -207,7 +207,13 @@ vg::VG pinchToVG(stPinchThreadSet* threadSet, std::map<int64_t, std::string>& th
 
 void help_main(char** argv) {
     std::cerr << "usage: " << argv[0] << " [options] VGFILE VGFILE" << std::endl
-        << "Compute the core graph from two graphs" << std::endl
+        << "Compute the core graph from two graphs, and print it to standard "
+        << "output in vg format." << std::endl
+        << "The core graph is constructed by merging the two graphs together "
+        << "along paths with the same name in both graphs. These paths must be "
+        << "of the same length (which is checked) and spell out identical "
+        << "sequences (which is not yet checked) for this tool to work "
+        << "correctly."
         << std::endl
         << "options:" << std::endl
         << "    -h, --help           print this help message" << std::endl;

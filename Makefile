@@ -19,7 +19,7 @@ LIBGCSA2=ekg/vg/gcsa2/libgcsa2.a
 LIBVCFLIB=ekg/vg/vcflib/libvcflib.a
 VGLIBS=$(LIBVG) $(LIBXG) $(LIBVCFLIB) $(LIBGSSW) $(LIBSNAPPY) $(LIBROCKSDB) $(LIBHTS) $(LIBGCSA2) $(LIBSDSL) $(LIBPROTOBUF)
 
-all: main
+all: corg
 
 $(LIBSDSL): $(LIBVG)
 
@@ -38,10 +38,10 @@ $(LIBSONLIB):
 # Needs XG to be built for the protobuf headers
 main.o: $(LIBXG)
 
-main: main.o embeddedGraph.o $(LIBPINCHESANDCACTI) $(LIBSONLIB) $(VGLIBS)
+corg: main.o embeddedGraph.o $(LIBPINCHESANDCACTI) $(LIBSONLIB) $(VGLIBS)
 	$(CXX) $^ -o $@ $(CXXFLAGS) $(LDFLAGS)
 
 clean:
-	rm -f main
+	rm -f corg
 	rm -f *.o
 	cd ekg/vg && $(MAKE) clean
