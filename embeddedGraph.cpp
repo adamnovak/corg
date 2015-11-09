@@ -3,8 +3,6 @@
 #include <vector>
 #include <set>
 
-#define debug
-
 namespace coregraph {
 
 EmbeddedGraph::EmbeddedGraph(vg::VG& graph, stPinchThreadSet* threadSet,
