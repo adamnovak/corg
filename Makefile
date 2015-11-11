@@ -1,7 +1,7 @@
 .PHONY: all clean
 
 CXX=g++
-INCLUDES=-Iekg/vg -Iekg/vg/gssw/src -Iekg/vg/gcsa2 -Iekg/vg/cpp -Iekg/vg/sdsl-lite/install/include -Iekg/vg/vcflib/src -Iekg/vg/vcflib -Iekg/vg/vcflib/tabixpp/htslib -Iekg/vg/progress_bar -Iekg/vg/lru_cache -Iekg/vg/fastahack -Iekg/vg/xg -Iekg/vg/xg/sdsl-lite/build/include -Ibenedictpaten/sonLib/C/inc
+INCLUDES=-Iekg/vg -Iekg/vg/gssw/src -Iekg/vg/protobuf/build/include -Iekg/vg/gcsa2 -Iekg/vg/cpp -Iekg/vg/sdsl-lite/install/include -Iekg/vg/vcflib/src -Iekg/vg/vcflib -Iekg/vg/vcflib/tabixpp/htslib -Iekg/vg/progress_bar -Iekg/vg/sparsehash/build/include -Iekg/vg/lru_cache -Iekg/vg/fastahack -Iekg/vg/xg -Iekg/vg/xg/sdsl-lite/build/include -Ibenedictpaten/sonLib/C/inc
 CXXFLAGS=-O3 -std=c++11 -fopenmp -g $(INCLUDES)
 LDSEARCH=-Lekg/vg -Lekg/vg/xg -Lekg/vg/xg/sdsl-lite/build/lib -Lekg/vg/xg/sdsl-lite/build/external/libdivsufsort/lib
 LDFLAGS=-lm -lpthread -lz -ldivsufsort -ldivsufsort64 -ljansson $(LDSEARCH)
@@ -27,7 +27,7 @@ $(LIBPROTOBUF): $(LIBVG)
 
 $(LIBVG):
 	cd ekg/vg && $(MAKE) libvg.a
-	
+
 # This builds out to the sonLib lib directory for some reason
 $(LIBPINCHESANDCACTI): $(LIBSONLIB)
 	cd benedictpaten/pinchesAndCacti && $(MAKE)
