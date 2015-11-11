@@ -19,6 +19,13 @@ LIBGCSA2=ekg/vg/gcsa2/libgcsa2.a
 LIBVCFLIB=ekg/vg/vcflib/libvcflib.a
 VGLIBS=$(LIBVG) $(LIBXG) $(LIBVCFLIB) $(LIBGSSW) $(LIBSNAPPY) $(LIBROCKSDB) $(LIBHTS) $(LIBGCSA2) $(LIBSDSL) $(LIBPROTOBUF)
 
+#Some little adjustments to build on OSX
+#(tested with gcc4.9 and jansson installed from MacPorts)
+SYS=$(shell uname -s)
+ifeq (${SYS},Darwin)
+	LDFLAGS:=$(LDFLAGS) -L/opt/local/lib/ # needed for macports jansson
+endif
+
 all: corg
 
 $(LIBSDSL): $(LIBVG)
