@@ -7,7 +7,9 @@ namespace coregraph {
 
 EmbeddedGraph::EmbeddedGraph(vg::VG& graph, stPinchThreadSet* threadSet,
     std::map<int64_t, std::string>& threadSequences,
-    std::function<int64_t(void)> getId): graph(graph), threadSet(threadSet) {
+    std::function<int64_t(void)> getId, const std::string& name): graph(graph),
+    threadSet(threadSet), name(name) {
+    
     // We need to construct some embedding of xg nodes in a pinch graph.
 
     // We can't combine any two vg nodes onto the same thread, if either of them
@@ -126,6 +128,21 @@ int64_t mappingLength(const vg::Mapping& mapping, vg::VG& graph) {
     }
 }
 
+size_t EmbeddedGraph::scanPath(std::list<vg::Mapping>& path) {
+    
+    size_t totalLength = 0;
+    
+    for(auto& mapping : path) {
+        // Force it to be a perfect mapping
+        assert(mappingIsPerfectMatch(mapping));
+        
+        // Calculate and incorporate its length
+        totalLength += mappingLength(mapping, graph);
+    }
+    
+    return totalLength;
+}
+
 void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
     // Look for common path names
     std::set<std::string> ourPaths;
@@ -141,6 +158,11 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
         }
     });
     
+    if(sharedPaths.size() == 0) {
+        // Warn the user that no merging can happen.
+        std::cerr << "WARNING: No shared paths exist to merge on! No bases will be merged!" << std::endl;
+    }
+    
     for(std::string pathName : sharedPaths) {
         // We zip along every shared path
     
@@ -148,6 +170,21 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
         std::list<vg::Mapping>& ourPath = graph.paths.get_path(pathName);
         std::list<vg::Mapping>& theirPath = other.graph.paths.get_path(pathName);
     
+        // Go through each and make sure their lengths agree.
+        std::cerr << "Checking " << pathName << " in " << name << " graph." << std::endl;
+        size_t ourLength = scanPath(ourPath);
+        std::cerr << "Checking " << pathName << " in " << other.name << " graph." << std::endl;
+        size_t theirLength = other.scanPath(theirPath);
+        
+        if(ourLength != theirLength) {
+            // These graphs disagree and we can't merge them without risking merging on an offset.
+            std::cerr << "Path length mismatch for " << pathName << ": " << ourLength << 
+                " in " << name << " vs. " << theirLength << " in " << other.name << std::endl;
+            throw std::runtime_error("Path length mismatch");
+        }
+        
+    
+        // Make iterators to go through them together
         std::list<vg::Mapping>::iterator ourMapping = ourPath.begin();
         std::list<vg::Mapping>::iterator theirMapping = theirPath.begin();
         
@@ -156,8 +193,8 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
         int64_t ourPathBase = 0;
         int64_t theirPathBase = 0;
 
-        std::cerr << "Processing path: " << pathName << std::endl;
-    
+        std::cerr << "Processing path " << pathName << std::endl;
+        
         while(ourMapping != ourPath.end() && theirMapping != theirPath.end()) {
             // Go along the two paths.
 #ifdef debug

@@ -299,8 +299,8 @@ int main(int argc, char** argv) {
     std::map<int64_t, std::string> threadSequences;
     
     // Add in each vg graph to the thread set
-    coregraph::EmbeddedGraph embedding1(vg1, threadSet, threadSequences, getId);
-    coregraph::EmbeddedGraph embedding2(vg2, threadSet, threadSequences, getId);
+    coregraph::EmbeddedGraph embedding1(vg1, threadSet, threadSequences, getId, vgFile1);
+    coregraph::EmbeddedGraph embedding2(vg2, threadSet, threadSequences, getId, vgFile2);
     
     // Trace the paths and merge the embedded graphs.
     embedding1.pinchWith(embedding2);
