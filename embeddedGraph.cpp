@@ -104,17 +104,18 @@ bool mappingIsPerfectMatch(const vg::Mapping& mapping) {
     return true;
 }
 
+#define debug
 bool EmbeddedGraph::isCoveredByPaths() {
     bool covered = true;
     
     graph.for_each_node([&](vg::Node* node) {
-#ifdef debug
-        std::cerr << "Node: " << node->id() << ": " << node->sequence() << std::endl;
-#endif
-        
         if(!graph.paths.has_node_mapping(node)) {
             // We found a node that doesn't have a path on it.
             covered = false;
+#ifdef debug
+            std::cerr << "Node: " << node->id() << ": " << node->sequence() << " is uncovered by any path" << std::endl;
+#endif
+            
         }
     
     });
@@ -122,6 +123,7 @@ bool EmbeddedGraph::isCoveredByPaths() {
     // Return the flag we've been updating
     return covered;
 }
+#undef debug
 
 /**
  * Return the (from) length of a Mapping, even if thgat Mapping has no edits
