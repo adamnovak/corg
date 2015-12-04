@@ -104,10 +104,30 @@ bool mappingIsPerfectMatch(const vg::Mapping& mapping) {
     return true;
 }
 
+bool EmbeddedGraph::isCoveredByPaths() {
+    bool covered = true;
+    
+    graph.for_each_node([&](vg::Node* node) {
+#ifdef debug
+        std::cerr << "Node: " << node->id() << ": " << node->sequence() << std::endl;
+#endif
+        
+        if(!graph.paths.has_node_mapping(node)) {
+            // We found a node that doesn't have a path on it.
+            covered = false;
+        }
+    
+    });
+    
+    // Return the flag we've been updating
+    return covered;
+}
+
 /**
  * Return the (from) length of a Mapping, even if thgat Mapping has no edits
  * (and is implicitly a full-length perfect match). Requires the graph that the
  * Mapping is to.
+ * TODO: put in a util file or something.
  */
 int64_t mappingLength(const vg::Mapping& mapping, vg::VG& graph) {
     if(mapping.edit_size() == 0) {
@@ -126,6 +146,10 @@ int64_t mappingLength(const vg::Mapping& mapping, vg::VG& graph) {
         // There are edits so just refer to them
         return vg::mapping_from_length(mapping);
     }
+}
+
+const std::string& EmbeddedGraph::getName() {
+    return name;
 }
 
 size_t EmbeddedGraph::scanPath(std::list<vg::Mapping>& path) {

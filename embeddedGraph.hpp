@@ -37,6 +37,17 @@ public:
     void pinchWith(EmbeddedGraph& other);
     
     /**
+     * Compute whether this graph is covered by paths, or whether any nodes
+     * exist that aren't on some path.
+     */
+    bool isCoveredByPaths();
+    
+    /**
+     * Return the name of the graph.
+     */
+    const std::string& getName();
+    
+    /**
      * Convert a pinch thread set to a VG graph, broken up into several protobuf
      * Graph objects, of suitable size for serialization. Graph objects are
      * streamed out through the callback.

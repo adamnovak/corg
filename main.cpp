@@ -302,6 +302,14 @@ int main(int argc, char** argv) {
     coregraph::EmbeddedGraph embedding1(vg1, threadSet, threadSequences, getId, vgFile1);
     coregraph::EmbeddedGraph embedding2(vg2, threadSet, threadSequences, getId, vgFile2);
     
+    // Complain if any of the graphs is not completely covered by paths
+    if(!embedding1.isCoveredByPaths()) {
+        std::cerr << "WARNING: " << embedding1.getName() << " contains nodes with no paths!" << std::endl;
+    }
+    if(!embedding2.isCoveredByPaths()) {
+        std::cerr << "WARNING: " << embedding2.getName() << " contains nodes with no paths!" << std::endl;
+    }
+    
     // Trace the paths and merge the embedded graphs.
     embedding1.pinchWith(embedding2);
     
