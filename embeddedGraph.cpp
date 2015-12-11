@@ -209,154 +209,398 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
             throw std::runtime_error("Path length mismatch");
         }
         
-    
-        // Make iterators to go through them together
-        std::list<vg::Mapping>::iterator ourMapping = ourPath.begin();
-        std::list<vg::Mapping>::iterator theirMapping = theirPath.begin();
-        
-        // Keep track of where we are alogn each path, so we can get mapping
-        // overlap
-        int64_t ourPathBase = 0;
-        int64_t theirPathBase = 0;
-
         std::cerr << "Processing path " << pathName << std::endl;
         
-        while(ourMapping != ourPath.end() && theirMapping != theirPath.end()) {
-            // Go along the two paths.
-#ifdef debug
-            std::cerr << "At " << ourPathBase << " in graph 1, " << theirPathBase << " in graph 2." << std::endl;
-            
-            std::cerr << "Our mapping: " << pb2json(*ourMapping) << std::endl;
-            std::cerr << "Their mapping: " << pb2json(*theirMapping) << std::endl;
-#endif
-            
-            // Make sure the mappings are perfect matches
-            assert(mappingIsPerfectMatch(*ourMapping));
-            assert(mappingIsPerfectMatch(*theirMapping));
-            
-            // See how long our mapping is and how long their mapping is
-            int64_t ourMappingLength = mappingLength(*ourMapping, graph);
-            int64_t theirMappingLength = mappingLength(*theirMapping, other.graph);
-
-#ifdef debug
-            std::cerr << "Our mapping is " << ourMappingLength << " bases on node " << (*ourMapping).position().node_id() <<
-                " offset " << (*ourMapping).position().offset() << " orientation " << (*ourMapping).is_reverse() << std::endl;
-            std::cerr << "Their mapping is " << theirMappingLength << " bases on node " << (*theirMapping).position().node_id() <<
-                " offset " << (*theirMapping).position().offset() << " orientation " << (*theirMapping).is_reverse() << std::endl;
-#endif
-
-            // See how much they overlap (start and length in each mapping)
-            if(ourPathBase < theirPathBase + theirMappingLength &&
-                theirPathBase < ourPathBase + ourMappingLength) {
-                // The two ranges do overlap
-                // Find their first base
-                int64_t overlapStart = std::max(ourPathBase, theirPathBase);
-                // And their past-the-end base
-                int64_t overlapEnd = std::min(ourPathBase + ourMappingLength,
-                    theirPathBase + theirMappingLength);    
-                // How long soes that make the overlap?
-                int64_t overlapLength = overlapEnd - overlapStart;
-                
-#ifdef debug
-                std::cerr << "The mappings overlap for " << overlapLength << " bp" << std::endl;
-#endif
-                
-                // Figure out where that overlapped region is in each graph
-                // (start, length, and orientation in each mapping's node).
-                // Start at the positions where the nodes start.
-                stPinchThread* ourThread, *theirThread;
-                int64_t ourOffset, theirOffset;
-                bool ourIsReverse, theirIsReverse;
-                
-                std::tie(ourThread, ourOffset, ourIsReverse) = embedding.at((*ourMapping).position().node_id());
-                std::tie(theirThread, theirOffset, theirIsReverse) = other.embedding.at((*theirMapping).position().node_id());
-                
-                // Advance by the offset in the node at which the mapping starts
-                ourOffset += (*ourMapping).position().offset() * (ourIsReverse ? -1 : 1);
-                theirOffset += (*theirMapping).position().offset() * (theirIsReverse ? -1 : 1);
-                
-                // Advance up to the start of the overlap, accounting for the
-                // orientation of both the mapping in the node and the node in
-                // the thread.
-                ourOffset += (overlapStart - ourPathBase) * (ourIsReverse != (*ourMapping).is_reverse() ? -1 : 1);
-                theirOffset += (overlapStart - theirPathBase) * (theirIsReverse != (*theirMapping).is_reverse() ? -1 : 1);
-                
-                // Pull back to the actual start of the overlap in thread
-                // coordinates if it is going backward on the thread in question
-                // from the mapping's start position. The -1 accounts for the
-                // inclusiveness of the original end coordinate, and going to an
-                // end-exclusive system.
-                if(ourIsReverse != (*ourMapping).is_reverse()) {
-                    ourOffset -= overlapLength - 1;
-                }
-                if(theirIsReverse != (*theirMapping).is_reverse()) {
-                    theirOffset -= overlapLength - 1;
-                }
-                
-                // Should we pinch the things relatively forward (0) or
-                // relatively reverse (1)? Calculated by xor-ing all the flags
-                // that could, by themselves, cause us to pinch in opposite
-                // orientations.
-                bool relativeOrientation = (ourIsReverse != (*ourMapping).is_reverse() != 
-                    theirIsReverse != (*theirMapping).is_reverse());
-
-#ifdef debug
-                std::cerr << "Pinch thread " << stPinchThread_getName(ourThread) << ":" << ourOffset << " and " << 
-                    stPinchThread_getName(theirThread) << ":" << theirOffset << " for " << overlapLength <<
-                    " bases in orientation " << (relativeOrientation ? "reverse" : "forward") << std::endl;
-#endif
-                
-                // Pinch the threads, making sure to convert to pinch graph orientations, which are backward.
-                stPinchThread_pinch(ourThread, theirThread, ourOffset, theirOffset, overlapLength, !relativeOrientation);
-
-                
-            }
-            
-            // Advance the mapping that ends first, or, if both end at the same place, advance both
-            int64_t minNextBase = std::min(ourPathBase + ourMappingLength, theirPathBase + theirMappingLength);
-            if(ourPathBase + ourMappingLength == minNextBase) {
-                // We end first, so advance us
-                ourPathBase = minNextBase;
-                ++ourMapping;
-#ifdef debug
-                std::cerr << "Advanced in our thread" << std::endl;
-#endif
-            }
-            if(theirPathBase + theirMappingLength == minNextBase) {
-                // They end first, so advance them
-                theirPathBase = minNextBase;
-                ++theirMapping;
-#ifdef debug
-                std::cerr << "Advanced in their thread" << std::endl;
-#endif
-            }
-            
-            // If you hit the end of one path before the end of the other, complain 
-        
-        }
-        
-        auto ourEnd = ourPath.end();
-        auto theirEnd = theirPath.end();
-        
-        if((ourMapping == ourPath.end()) != (theirMapping == theirPath.end())) {
-            std::cerr << "We ran out of path in one graph and not in the other!" << std::endl;
-            
-            if(ourMapping != ourPath.end()) {
-                std::cerr << "We have a mapping" << std::endl;
-                std::cerr << "Our mapping: " << pb2json(*ourMapping) << std::endl;
-            }
-            
-            if(theirMapping != theirPath.end()) {
-                std::cerr << "They have a mapping" << std::endl;
-                std::cerr << "Their mapping: " << pb2json(*theirMapping) << std::endl;
-            }
-            
-            // We should reach the end at the same time, but we didn't
-            throw std::runtime_error("Ran out of mappings on one path before the other!");
-        }
-        
+        // Do thje actual merge
+        pinchOnPaths(ourPath, other, theirPath);
     }
 }
+
+void EmbeddedGraph::pinchOnPaths(std::list<vg::Mapping>& path, EmbeddedGraph& other, 
+    std::list<vg::Mapping>& otherPath) {
+        
+    // Make iterators to go through them together
+    std::list<vg::Mapping>::iterator ourMapping = path.begin();
+    std::list<vg::Mapping>::iterator theirMapping = otherPath.begin();
+    
+    // Keep track of where we are alogn each path, so we can get mapping
+    // overlap
+    int64_t ourPathBase = 0;
+    int64_t theirPathBase = 0;
+
+    while(ourMapping != path.end() && theirMapping != otherPath.end()) {
+        // Go along the two paths.
+#ifdef debug
+        std::cerr << "At " << ourPathBase << " in graph 1, " << theirPathBase << " in graph 2." << std::endl;
+        
+        std::cerr << "Our mapping: " << pb2json(*ourMapping) << std::endl;
+        std::cerr << "Their mapping: " << pb2json(*theirMapping) << std::endl;
+#endif
+        
+        // Make sure the mappings are perfect matches
+        assert(mappingIsPerfectMatch(*ourMapping));
+        assert(mappingIsPerfectMatch(*theirMapping));
+        
+        // See how long our mapping is and how long their mapping is
+        int64_t ourMappingLength = mappingLength(*ourMapping, graph);
+        int64_t theirMappingLength = mappingLength(*theirMapping, other.graph);
+
+#ifdef debug
+        std::cerr << "Our mapping is " << ourMappingLength << " bases on node " << (*ourMapping).position().node_id() <<
+            " offset " << (*ourMapping).position().offset() << " orientation " << (*ourMapping).is_reverse() << std::endl;
+        std::cerr << "Their mapping is " << theirMappingLength << " bases on node " << (*theirMapping).position().node_id() <<
+            " offset " << (*theirMapping).position().offset() << " orientation " << (*theirMapping).is_reverse() << std::endl;
+#endif
+
+        // See how much they overlap (start and length in each mapping)
+        if(ourPathBase < theirPathBase + theirMappingLength &&
+            theirPathBase < ourPathBase + ourMappingLength) {
+            // The two ranges do overlap
+            // Find their first base
+            int64_t overlapStart = std::max(ourPathBase, theirPathBase);
+            // And their past-the-end base
+            int64_t overlapEnd = std::min(ourPathBase + ourMappingLength,
+                theirPathBase + theirMappingLength);    
+            // How long soes that make the overlap?
+            int64_t overlapLength = overlapEnd - overlapStart;
+            
+#ifdef debug
+            std::cerr << "The mappings overlap for " << overlapLength << " bp" << std::endl;
+#endif
+            
+            // Figure out where that overlapped region is in each graph
+            // (start, length, and orientation in each mapping's node).
+            // Start at the positions where the nodes start.
+            stPinchThread* ourThread, *theirThread;
+            int64_t ourOffset, theirOffset;
+            bool ourIsReverse, theirIsReverse;
+            
+            std::tie(ourThread, ourOffset, ourIsReverse) = embedding.at((*ourMapping).position().node_id());
+            std::tie(theirThread, theirOffset, theirIsReverse) = other.embedding.at((*theirMapping).position().node_id());
+            
+            // Advance by the offset in the node at which the mapping starts
+            ourOffset += (*ourMapping).position().offset() * (ourIsReverse ? -1 : 1);
+            theirOffset += (*theirMapping).position().offset() * (theirIsReverse ? -1 : 1);
+            
+            // Advance up to the start of the overlap, accounting for the
+            // orientation of both the mapping in the node and the node in
+            // the thread.
+            ourOffset += (overlapStart - ourPathBase) * (ourIsReverse != (*ourMapping).is_reverse() ? -1 : 1);
+            theirOffset += (overlapStart - theirPathBase) * (theirIsReverse != (*theirMapping).is_reverse() ? -1 : 1);
+            
+            // Pull back to the actual start of the overlap in thread
+            // coordinates if it is going backward on the thread in question
+            // from the mapping's start position. The -1 accounts for the
+            // inclusiveness of the original end coordinate, and going to an
+            // end-exclusive system.
+            if(ourIsReverse != (*ourMapping).is_reverse()) {
+                ourOffset -= overlapLength - 1;
+            }
+            if(theirIsReverse != (*theirMapping).is_reverse()) {
+                theirOffset -= overlapLength - 1;
+            }
+            
+            // Should we pinch the things relatively forward (0) or
+            // relatively reverse (1)? Calculated by xor-ing all the flags
+            // that could, by themselves, cause us to pinch in opposite
+            // orientations.
+            bool relativeOrientation = (ourIsReverse != (*ourMapping).is_reverse() != 
+                theirIsReverse != (*theirMapping).is_reverse());
+
+#ifdef debug
+            std::cerr << "Pinch thread " << stPinchThread_getName(ourThread) << ":" << ourOffset << " and " << 
+                stPinchThread_getName(theirThread) << ":" << theirOffset << " for " << overlapLength <<
+                " bases in orientation " << (relativeOrientation ? "reverse" : "forward") << std::endl;
+#endif
+            
+            // Pinch the threads, making sure to convert to pinch graph orientations, which are backward.
+            stPinchThread_pinch(ourThread, theirThread, ourOffset, theirOffset, overlapLength, !relativeOrientation);
+
+            
+        }
+        
+        // Advance the mapping that ends first, or, if both end at the same place, advance both
+        int64_t minNextBase = std::min(ourPathBase + ourMappingLength, theirPathBase + theirMappingLength);
+        if(ourPathBase + ourMappingLength == minNextBase) {
+            // We end first, so advance us
+            ourPathBase = minNextBase;
+            ++ourMapping;
+#ifdef debug
+            std::cerr << "Advanced in our thread" << std::endl;
+#endif
+        }
+        if(theirPathBase + theirMappingLength == minNextBase) {
+            // They end first, so advance them
+            theirPathBase = minNextBase;
+            ++theirMapping;
+#ifdef debug
+            std::cerr << "Advanced in their thread" << std::endl;
+#endif
+        }
+        
+        // If you hit the end of one path before the end of the other, complain 
+    
+    }
+    
+    if((ourMapping == path.end()) != (theirMapping == otherPath.end())) {
+        std::cerr << "We ran out of path in one graph and not in the other!" << std::endl;
+        
+        if(ourMapping != path.end()) {
+            std::cerr << "We have a mapping" << std::endl;
+            std::cerr << "Our mapping: " << pb2json(*ourMapping) << std::endl;
+        }
+        
+        if(theirMapping != otherPath.end()) {
+            std::cerr << "They have a mapping" << std::endl;
+            std::cerr << "Their mapping: " << pb2json(*theirMapping) << std::endl;
+        }
+        
+        // We should reach the end at the same time, but we didn't
+        throw std::runtime_error("Ran out of mappings on one path before the other!");
+    }
+        
+}
+
+std::list<vg::Mapping>&& EmbeddedGraph::makeMinimalPath(std::string& kmer,
+    std::list<vg::NodeTraversal>::iterator occurrence, int offset,
+    std::list<vg::NodeTraversal>& path) {
+
+    // Generate a path (std::list<vg::Mapping>) that describes only the
+    // kmer.
+    std::list<vg::Mapping> minimalPath;
+    
+    // How many bases of the kmer are yet to be accounted for?
+    size_t remainingKmerLength = kmer.size();
+    
+    // What will the offset from where we enter the next node be? Will only
+    // be nonzero on the first node.
+    size_t nextOffset = offset;
+    
+    for(std::list<vg::NodeTraversal>::iterator i = occurrence; i != path.end() && remainingKmerLength > 0; ++i) {
+        // For every node the kmer visits
+        
+        // Make a Mapping to this node
+        vg::Mapping mapping;
+        
+        // How long is the node we're mapping to?
+        size_t nodeLength = (*i).node->sequence().size();
+        
+        // Set the node ID we map to
+        mapping.mutable_position()->set_node_id((*i).node->id());
+        // Set the offset we map to
+        mapping.mutable_position()->set_offset(nextOffset);
+        if((*i).backward) {
+            // Adjust so we actually come to the right side instead of the
+            // left.
+            mapping.set_is_reverse(true);
+            
+            // We need to correct the offset to count from the start of the
+            // underlying, reversed node, instead of the start of the
+            // traversal.
+            mapping.mutable_position()->set_offset(nodeLength - nextOffset - 1);
+        }
+        
+        // Populate the length of the mapping, in a single perfect match
+        // edit.
+        vg::Edit* edit = mapping.add_edit();
+        
+        if(remainingKmerLength >= (nodeLength - nextOffset)) {
+            // We don't finish with this node. Map over all of it.
+            edit->set_from_length(nodeLength - nextOffset);
+            edit->set_to_length(nodeLength - nextOffset);
+            
+            // Update the remaining kmer length to account for how much we
+            // used in this node.
+            remainingKmerLength -= (nodeLength - nextOffset);
+        } else {
+            // We do finish in this node. Map over only the part we actually
+            // cover.
+            edit->set_from_length(remainingKmerLength);
+            edit->set_to_length(remainingKmerLength);
+            
+            // We consumed the rest of the kmer length.
+            remainingKmerLength = 0;
+        }
+        
+        // Adjust the offset for the next iteration. It can only be nonzero
+        // for the first node.
+        nextOffset = 0;
+        
+        // Add the mapping to the path
+        minimalPath.push_back(mapping);
+    }
+    
+    // Spit back the minimal path we have constructed, with only the Mappings
+    // covering the actual kmer sequence.
+    return std::move(minimalPath);
+
+}
+
+bool EmbeddedGraph::paths_equal(std::list<vg::Mapping>& path1, std::list<vg::Mapping>& path2) {
+    // We're going to structurally compare paths that we know are made by makeMinimalPath.
+    // We therefore can look at only certain fields.
+    
+    if(path1.size() != path2.size()) {
+        // They can't be equal if they differ in number of mappings.
+        return false;
+    }
+    
+    // Loop through the two paths in parallel. See
+    // <http://stackoverflow.com/a/19933798>
+    auto i = path1.begin();
+    auto j = path2.begin();
+    
+    for(; i != path1.end() && j != path2.end(); ++i, ++j) {
+        auto& mapping1 = *i;
+        auto& mapping2 = *j;
+        
+        // Compare all the fields of the mappings
+        
+        if(mapping1.position().node_id() != mapping2.position().node_id()) {
+            return false;
+        }
+        
+        if(mapping1.position().offset() != mapping2.position().offset()) {
+            return false;
+        }
+        
+        if(mapping1.is_reverse() != mapping2.is_reverse()) {
+            return false;
+        }
+        
+        if(mapping1.edit_size() != mapping2.edit_size()) {
+            return false;
+        }
+        
+        for(int k = 0; k < mapping1.edit_size(); k++) {
+            auto& edit1 = mapping1.edit(k);
+            auto& edit2 = mapping2.edit(k);
+            
+            // Compare all the fields of each edit
+            
+            if(edit1.from_length() != edit2.from_length()) {
+                return false;
+            }
+            
+            if(edit1.to_length() != edit2.to_length()) {
+                return false;
+            }
+        }
+    }
+    
+    // If we get here, all the mappings match
+    return true;
+}
+
+void EmbeddedGraph::pinchOnKmers(vg::Index& index, EmbeddedGraph& other,
+    vg::Index& otherIndex, size_t kmer_size, size_t edge_max) {
+    
+    // Actually good strategy:
+    // Loop through the kmer instances in our index
+    // For each first kmer instance followed by a different kmer (or for the last kmer instance if it's the first with its value)
+    // Look it up in the other index and see if it's unique there too
+    // If so, get the starting point
+    // Search out a path that matches the kmer
+    // Do the same to get the path in the other graph
+    // Merge the paths together (make tow std::list<vg::Mapping> lists and use the path merge code)
+    
+    // Alternate easy startegy that I will use:
+    
+    // Keep track of the paths for unique kmers in our graph.
+    // A kmer that occurs along multiple paths, but which the index still thinks is unique, 
+    std::map<std::string, std::list<vg::Mapping>> uniqueKmerPaths;
+    // We need to protect it with a mutex
+    std::mutex uniqueKmerPathsMutex;
+    
+    // And in the other graph
+    std::map<std::string, std::list<vg::Mapping>> otherUniqueKmerPaths;
+    // We need to protect it with a mutex
+    std::mutex otherUniqueKmerPathsMutex;
+    
+    
+    // Enumerate kmers in one graph with for_each_kmer_parallel
+    graph.for_each_kmer_parallel(kmer_size, edge_max, [&](std::string& kmer,
+        std::list<vg::NodeTraversal>::iterator occurrence, int offset,
+        std::list<vg::NodeTraversal>& path, vg::VG& kmer_graph) {
+        
+        // We receive each kmer, starting at the given offset from the left of
+        // the given traversal, along the given path.
+        
+        // Make sure the kmer is unique in our graph.
+        
+        if(index.approx_size_of_kmer_matches(kmer) > MAX_UNIQUE_KMER_BYTES) {
+            // If its data takes up lots of space, it's not unique
+            return;
+        }
+        
+        // Count up how many times it occurs
+        size_t kmerCount = 0;
+        index.for_kmer_range(kmer, [&](std::string& key, std::string& value) {
+            kmerCount++;
+        });
+        
+        if(kmerCount > 1) {
+            // It's not unique in our graph
+            return;
+        }
+        
+        // If we get here it occurs only in one place in our graph.
+        // But does it occur on multiple paths?
+        
+        // Get the minimal path for the kmer
+        std::list<vg::Mapping> minimalPath(makeMinimalPath(kmer, occurrence, offset, path));
+        
+        // Now we need to do serial access to the deduplication index
+        std::lock_guard<std::mutex> guard(uniqueKmerPathsMutex);
+        
+        // Look up the kmer in the index
+        auto kv = uniqueKmerPaths.find(kmer);
+        
+        if(kv == uniqueKmerPaths.end()) {
+            // If it's not in there, add it with the path we just made.
+            uniqueKmerPaths[kmer] = minimalPath;
+        } else {
+            // Make a reference to the path used.
+            auto& oldPath = (*kv).second;
+            
+            if(oldPath.size() == 0) {
+                // If it's in there with an empty minimal path, it's already a dupe. Do nothing.
+            } else if(paths_equal(oldPath, minimalPath)) {
+                // If it's in there with a nonempty minimal path and it matches the one we just made, do nothing.
+            } else {
+                // If it's in there with a nonempty minimal path and it doesn't match
+                // the one we just made, empty its path to mark it as a duplicate.
+                oldPath.clear();
+            }
+        }
+        
+        // The lock guard automatically unlocks
+    }, true, false); // Accept duplicate kmers, but not kmers with negative offsets.
+    
+    // Look up each kmer instance in the index to see if it's unique
+    
+    // If so save its path
+    
+    // Do the same for the other graph
+    
+    // Then find the paths for corresponding kmers and merge on them.
+    
+    // I think I'll do this one because it's easier than re-finding kpaths 
+    
     
     
 }
+    
+    
+}
+
+
+
+
+
+
+
+
+
+
+

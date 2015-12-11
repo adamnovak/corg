@@ -5,6 +5,7 @@
 #include <getopt.h>
 
 #include "ekg/vg/vg.hpp"
+#include "ekg/vg/index.hpp"
 
 #include "embeddedGraph.hpp"
 
@@ -213,10 +214,13 @@ void help_main(char** argv) {
         << "along paths with the same name in both graphs. These paths must be "
         << "of the same length (which is checked) and spell out identical "
         << "sequences (which is not yet checked) for this tool to work "
-        << "correctly."
+        << "correctly." << std::endl << std::endl
+        << "If -k is specified, the provided graphs must be indexed."
         << std::endl
         << "options:" << std::endl
-        << "    -h, --help           print this help message" << std::endl;
+        << "    -h, --help          print this help message" << std::endl
+        << "    -k, --kmer-size N   join graphs on mutually unique kmers of size N" << std::endl
+        << "    -e, --edge-max N    exclude k-paths which have N or more choice points" << std::endl;
 }
 
 int main(int argc, char** argv) {
@@ -227,21 +231,30 @@ int main(int argc, char** argv) {
         return 1;
     }
     
+    size_t kmer_size = 0;
+    size_t edge_max = 0;
+    
     optind = 1; // Start at first real argument
     bool optionsRemaining = true;
     while(optionsRemaining) {
         static struct option longOptions[] = {
+            {"kmer-size", required_argument, 0, 'k'},
+            {"edge_max", required_argument, 0, 'e'},
             {"help", no_argument, 0, 'h'},
             {0, 0, 0, 0}
         };
 
         int optionIndex = 0;
 
-        switch(getopt_long(argc, argv, "h", longOptions, &optionIndex)) {
+        switch(getopt_long(argc, argv, "k:e:h", longOptions, &optionIndex)) {
         // Option value is in global optarg
         case -1:
             optionsRemaining = false;
             break;
+        case 'k': // Set the kmer size
+            kmer_size = atol(optarg);
+        case 'e': // Set the edge max parameter for kmer enumeration
+            edge_max = atol(optarg);
         case 'h': // When the user asks for help
         case '?': // When we get options we can't parse
             help_main(argv);
@@ -265,6 +278,10 @@ int main(int argc, char** argv) {
     std::string vgFile1 = argv[optind++];
     std::string vgFile2 = argv[optind++];
     
+    // Guess index names (TODO: add options)
+    std::string indexDir1 = vgFile1 + ".index";
+    std::string indexDir2 = vgFile2 + ".index";
+    
     // Open the files
     std::ifstream vgStream1(vgFile1);
     if(!vgStream1.good()) {
@@ -277,6 +294,17 @@ int main(int argc, char** argv) {
         std::cerr << "Could not read " << vgFile2 << std::endl;
         exit(1);
     }
+    
+    // Open the indexes
+    vg::Index index1;
+    vg::Index index2;
+    
+    if(kmer_size) {
+        // Only go looking for indexes if we want to merge on kmers.
+        index1.open_read_only(indexDir1);
+        index2.open_read_only(indexDir2);
+    }
+    
     
     // Load up the first VG file
     vg::VG vg1(vgStream1);
@@ -312,6 +340,11 @@ int main(int argc, char** argv) {
     
     // Trace the paths and merge the embedded graphs.
     embedding1.pinchWith(embedding2);
+    
+    if(kmer_size > 0) {
+        // Merge on kmers that are unique in both graphs.
+        embedding1.pinchOnKmers(index1, embedding2, index2);
+    }
     
     // Make another vg graph from the thread set
     vg::VG core = pinchToVG(threadSet, threadSequences);
