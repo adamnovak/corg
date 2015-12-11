@@ -1,0 +1,25 @@
+{
+    "node": [
+        {"sequence": "TTTTT", "id": 1},
+        {"sequence": "TGTAATC", "id": 2},
+        {"sequence": "CTAATG", "id": 3},
+        {"sequence": "GGGGG", "id": 4},   
+        {"sequence": "TATATATATATATATATATATATATATATATATATATATAT", "id": 5},
+        {"sequence": "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG", "id": 6},
+        {"sequence": "AGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGAGA", "id": 7} 
+    ],
+    "edge": [
+        {"from": 2, "to": 1},
+        {"from": 3, "to": 2},
+        {"from": 2, "to": 3},
+        {"from": 4, "to": 3},
+        {"from": 1, "to": 1, "to_end": true},
+        {"from": 4, "to": 4, "from_start": true},
+        {"from": 1, "to": 4},
+        {"from": 6, "to": 5},
+        {"from": 6, "to": 5, "from_start": true},
+        {"from": 7, "to": 6},
+        {"from": 7, "to": 6, "to_end": true},
+        {"from": 5, "to": 7}
+    ]
+}

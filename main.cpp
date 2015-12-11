@@ -351,6 +351,9 @@ int main(int argc, char** argv) {
         embedding1.pinchOnKmers(*index1, embedding2, *index2, kmer_size, edge_max);
     }
     
+    // Fix trivial joins so we don't produce more vg nodes than we really need to.
+    stPinchThreadSet_joinTrivialBoundaries(threadSet);
+    
     // Make another vg graph from the thread set
     vg::VG core = pinchToVG(threadSet, threadSequences);
     
