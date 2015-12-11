@@ -492,6 +492,26 @@ bool EmbeddedGraph::paths_equal(std::list<vg::Mapping>& path1, std::list<vg::Map
     return true;
 }
 
+std::list<vg::Mapping> EmbeddedGraph::reverse_path(std::list<vg::Mapping> path) {
+    // We need a function variable so we can supply a non-const reference.
+    std::function<int64_t(int64_t)> getNodeLength = [&](int64_t nodeId) {
+        // We need to be able to provide the sizes of nodes to do
+        // this, and we get those sizes from our graph.
+        return graph.get_node(nodeId)->sequence().size();
+    };
+    
+    std::list<vg::Mapping> pathRev;
+    for(auto& mapping : path) {
+        // Reverse each mapping
+        vg::Mapping reversed = vg::reverse_mapping(mapping, getNodeLength);
+        
+        // Put the mapping at the front of our new list (to reverse the order)
+        pathRev.push_front(reversed);
+    }
+    
+    return pathRev;
+}
+
 void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
     vg::Index& theirIndex, size_t kmer_size, size_t edge_max) {
     
@@ -517,7 +537,11 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
     // We need to protect it with a mutex
     std::mutex theirUniqueKmerPathsMutex;
     
-    auto observeKmer = [](std::string& kmer,
+    #ifdef debug
+        std::cerr << "Looking for kmers of size " << kmer_size << std::endl;
+    #endif
+    
+    auto observeKmer = [this](std::string& kmer,
         std::list<vg::NodeTraversal>::iterator occurrence, int offset,
         std::list<vg::NodeTraversal>& path, vg::Index& index,
         std::map<std::string, std::list<vg::Mapping>>& uniqueKmerPaths,
@@ -540,6 +564,16 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
             kmerCount++;
         });
         
+        // Also include occurrences of the reverse complement
+        index.for_kmer_range(vg::reverse_complement(kmer), [&](std::string& key, std::string& value) {
+            kmerCount++;
+        });
+        
+#ifdef debug
+        #pragma omp critical(cerr)
+        std::cerr << "Kmer " << kmer << " occurs " << kmerCount << " times in " << getName() << std::endl;
+#endif
+        
         if(kmerCount > 1) {
             // It's not unique in our graph
             return;
@@ -551,27 +585,77 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
         // Get the minimal path for the kmer
         std::list<vg::Mapping> minimalPath(makeMinimalPath(kmer, occurrence, offset, path));
         
+        // Compute what it would look like as a reverse complement
+        std::list<vg::Mapping> minimalPathRev = reverse_path(minimalPath);
+        
         // Now we need to do serial access to the deduplication index
         std::lock_guard<std::mutex> guard(uniqueKmerPathsMutex);
         
         // Look up the kmer in the index
         auto kv = uniqueKmerPaths.find(kmer);
         
+        // And the reverse version
+        auto reverse_kv = uniqueKmerPaths.find(vg::reverse_complement(kmer));
+        
         if(kv == uniqueKmerPaths.end()) {
-            // If it's not in there, add it with the path we just made.
-            uniqueKmerPaths[kmer] = minimalPath;
+            if(reverse_kv == uniqueKmerPaths.end()) {
+                // It's not in there and neither is its reverse complement.
+                // Add it with the path we just made.
+                uniqueKmerPaths[kmer] = minimalPath;
+#ifdef debug
+                #pragma omp critical(cerr)
+                std::cerr << "Found unique kmer " << kmer << std::endl;
+#endif
+            } else {
+                // The reverse complement is in but this kmer isn't.
+                // Find the path the reverse complement is using.
+                auto& oldPath = (*reverse_kv).second;
+                
+                if(oldPath.size() == 0) {
+                    // If it's in there with an empty minimal path, it's already
+                    // a dupe. Do nothing.
+                } else if(paths_equal(oldPath, minimalPathRev)) {
+                    // If it's in there with a nonempty minimal path and it
+                    // matches the one for our reverse complement, do nothing.
+                } else {
+                    // If it's in there with a nonempty minimal path and it
+                    // doesn't match the one we just made, empty its path to
+                    // mark it as a duplicate.
+                    oldPath.clear();
+                    
+#ifdef debug
+                    #pragma omp critical(cerr)
+                    std::cerr << "Formerly unique kmer " << kmer << " is now RC-duplicated" << std::endl;
+#endif
+                    
+                }
+            }
         } else {
+            // This kmer is in.
             // Make a reference to the path used.
             auto& oldPath = (*kv).second;
             
             if(oldPath.size() == 0) {
-                // If it's in there with an empty minimal path, it's already a dupe. Do nothing.
+                // If it's in there with an empty minimal path, it's already a
+                // dupe. Do nothing.
             } else if(paths_equal(oldPath, minimalPath)) {
-                // If it's in there with a nonempty minimal path and it matches the one we just made, do nothing.
+                // If it's in there with a nonempty minimal path and it matches
+                // the one we just made, do nothing.
             } else {
                 // If it's in there with a nonempty minimal path and it doesn't match
                 // the one we just made, empty its path to mark it as a duplicate.
                 oldPath.clear();
+                
+                if(reverse_kv != uniqueKmerPaths.end()) {
+                    // The reverse complement is also in, so we need to
+                    // clear it too.
+                    (*reverse_kv).second.clear();
+                }
+                
+#ifdef debug
+                    #pragma omp critical(cerr)
+                    std::cerr << "Formerly unique kmer " << kmer << " is now duplicated" << std::endl;
+#endif
             }
         }
         
@@ -621,6 +705,28 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
             
             // Merge on the paths
             pinchOnPaths(kv.second, other, theirPath);
+            
+#ifdef debug
+            std::cerr << "Mutually unique kmer " << kv.first << " pinched on" << std::endl;
+#endif
+            
+        } else if(theirUniqueKmerPaths.count(vg::reverse_complement(kv.first))) {
+            // If the other graph has it reverse complemented, find out where
+            auto& theirPath = theirUniqueKmerPaths.at(kv.first);
+            
+            if(theirPath.empty()) {
+                // This was really duplicated
+                continue;
+            }
+            
+            auto theirPathRev = other.reverse_path(theirPath);
+            
+            // Merge on the paths (ours forward, theirs reversed)
+            pinchOnPaths(kv.second, other, theirPathRev);
+            
+#ifdef debug
+            std::cerr << "RC-mutually unique kmer " << kv.first << " pinched on" << std::endl;
+#endif
             
         }
         

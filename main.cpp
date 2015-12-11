@@ -348,7 +348,7 @@ int main(int argc, char** argv) {
     
     if(kmer_size > 0) {
         // Merge on kmers that are unique in both graphs.
-        embedding1.pinchOnKmers(*index1, embedding2, *index2);
+        embedding1.pinchOnKmers(*index1, embedding2, *index2, kmer_size, edge_max);
     }
     
     // Make another vg graph from the thread set
