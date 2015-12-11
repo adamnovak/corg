@@ -253,8 +253,10 @@ int main(int argc, char** argv) {
             break;
         case 'k': // Set the kmer size
             kmer_size = atol(optarg);
+            break;
         case 'e': // Set the edge max parameter for kmer enumeration
             edge_max = atol(optarg);
+            break;
         case 'h': // When the user asks for help
         case '?': // When we get options we can't parse
             help_main(argv);
@@ -295,14 +297,17 @@ int main(int argc, char** argv) {
         exit(1);
     }
     
-    // Open the indexes
-    vg::Index index1;
-    vg::Index index2;
+    // We may have indexes. We need to use pointers because destructing an index
+    // that was never opened segfaults. TODO: fix vg
+    vg::Index* index1 = nullptr;
+    vg::Index* index2 = nullptr;
     
     if(kmer_size) {
         // Only go looking for indexes if we want to merge on kmers.
-        index1.open_read_only(indexDir1);
-        index2.open_read_only(indexDir2);
+        index1 = new vg::Index();
+        index1->open_read_only(indexDir1);
+        index2 = new vg::Index();
+        index2->open_read_only(indexDir2);
     }
     
     
@@ -343,7 +348,7 @@ int main(int argc, char** argv) {
     
     if(kmer_size > 0) {
         // Merge on kmers that are unique in both graphs.
-        embedding1.pinchOnKmers(index1, embedding2, index2);
+        embedding1.pinchOnKmers(*index1, embedding2, *index2);
     }
     
     // Make another vg graph from the thread set

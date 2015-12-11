@@ -361,9 +361,9 @@ void EmbeddedGraph::pinchOnPaths(std::list<vg::Mapping>& path, EmbeddedGraph& ot
         
 }
 
-std::list<vg::Mapping>&& EmbeddedGraph::makeMinimalPath(std::string& kmer,
-    std::list<vg::NodeTraversal>::iterator occurrence, int offset,
-    std::list<vg::NodeTraversal>& path) {
+std::list<vg::Mapping>&& EmbeddedGraph::makeMinimalPath(
+    std::string& kmer, std::list<vg::NodeTraversal>::iterator occurrence,
+    int offset, std::list<vg::NodeTraversal>& path) {
 
     // Generate a path (std::list<vg::Mapping>) that describes only the
     // kmer.
@@ -492,8 +492,8 @@ bool EmbeddedGraph::paths_equal(std::list<vg::Mapping>& path1, std::list<vg::Map
     return true;
 }
 
-void EmbeddedGraph::pinchOnKmers(vg::Index& index, EmbeddedGraph& other,
-    vg::Index& otherIndex, size_t kmer_size, size_t edge_max) {
+void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
+    vg::Index& theirIndex, size_t kmer_size, size_t edge_max) {
     
     // Actually good strategy:
     // Loop through the kmer instances in our index
@@ -508,25 +508,26 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& index, EmbeddedGraph& other,
     
     // Keep track of the paths for unique kmers in our graph.
     // A kmer that occurs along multiple paths, but which the index still thinks is unique, 
-    std::map<std::string, std::list<vg::Mapping>> uniqueKmerPaths;
+    std::map<std::string, std::list<vg::Mapping>> ourUniqueKmerPaths;
     // We need to protect it with a mutex
-    std::mutex uniqueKmerPathsMutex;
+    std::mutex ourUniqueKmerPathsMutex;
     
     // And in the other graph
-    std::map<std::string, std::list<vg::Mapping>> otherUniqueKmerPaths;
+    std::map<std::string, std::list<vg::Mapping>> theirUniqueKmerPaths;
     // We need to protect it with a mutex
-    std::mutex otherUniqueKmerPathsMutex;
+    std::mutex theirUniqueKmerPathsMutex;
     
-    
-    // Enumerate kmers in one graph with for_each_kmer_parallel
-    graph.for_each_kmer_parallel(kmer_size, edge_max, [&](std::string& kmer,
+    auto observeKmer = [](std::string& kmer,
         std::list<vg::NodeTraversal>::iterator occurrence, int offset,
-        std::list<vg::NodeTraversal>& path, vg::VG& kmer_graph) {
+        std::list<vg::NodeTraversal>& path, vg::Index& index,
+        std::map<std::string, std::list<vg::Mapping>>& uniqueKmerPaths,
+        std::mutex& uniqueKmerPathsMutex) {
         
         // We receive each kmer, starting at the given offset from the left of
         // the given traversal, along the given path.
         
-        // Make sure the kmer is unique in our graph.
+        // We will make sure it is unique in our graph, and then add it to our
+        // table of unique kmers.
         
         if(index.approx_size_of_kmer_matches(kmer) > MAX_UNIQUE_KMER_BYTES) {
             // If its data takes up lots of space, it's not unique
@@ -575,20 +576,55 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& index, EmbeddedGraph& other,
         }
         
         // The lock guard automatically unlocks
+    
+    };
+    
+    // Enumerate kmers in one graph with for_each_kmer_parallel
+    graph.for_each_kmer_parallel(kmer_size, edge_max, [&](std::string& kmer,
+        std::list<vg::NodeTraversal>::iterator occurrence, int offset,
+        std::list<vg::NodeTraversal>& path, vg::VG& kmer_graph) {
+        
+        // We receive each kmer, starting at the given offset from the left of
+        // the given traversal, along the given path.
+        
+        // Observe the kmer for us
+        observeKmer(kmer, occurrence, offset, path, ourIndex, ourUniqueKmerPaths, ourUniqueKmerPathsMutex);
+        
     }, true, false); // Accept duplicate kmers, but not kmers with negative offsets.
     
-    // Look up each kmer instance in the index to see if it's unique
-    
-    // If so save its path
-    
     // Do the same for the other graph
+    other.graph.for_each_kmer_parallel(kmer_size, edge_max, [&](std::string& kmer,
+        std::list<vg::NodeTraversal>::iterator occurrence, int offset,
+        std::list<vg::NodeTraversal>& path, vg::VG& kmer_graph) {
+        
+        // Observe the kmer for them
+        observeKmer(kmer, occurrence, offset, path, theirIndex, theirUniqueKmerPaths, theirUniqueKmerPathsMutex);
+        
+    }, true, false); // Accept duplicate kmers, but not kmers with negative offsets.
     
     // Then find the paths for corresponding kmers and merge on them.
-    
-    // I think I'll do this one because it's easier than re-finding kpaths 
-    
-    
-    
+    for(auto& kv : ourUniqueKmerPaths) {
+        // For each kmer, path pair
+        if(kv.second.empty()) {
+            // This was really duplicated
+            continue;
+        }
+        
+        if(theirUniqueKmerPaths.count(kv.first)) {
+            // If the other graph has it, find out where
+            auto& theirPath = theirUniqueKmerPaths.at(kv.first);
+            
+            if(theirPath.empty()) {
+                // This was really duplicated
+                continue;
+            }
+            
+            // Merge on the paths
+            pinchOnPaths(kv.second, other, theirPath);
+            
+        }
+        
+    }
 }
     
     
