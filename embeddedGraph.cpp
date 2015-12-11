@@ -104,7 +104,6 @@ bool mappingIsPerfectMatch(const vg::Mapping& mapping) {
     return true;
 }
 
-#define debug
 bool EmbeddedGraph::isCoveredByPaths() {
     bool covered = true;
     
@@ -123,7 +122,6 @@ bool EmbeddedGraph::isCoveredByPaths() {
     // Return the flag we've been updating
     return covered;
 }
-#undef debug
 
 /**
  * Return the (from) length of a Mapping, even if thgat Mapping has no edits
@@ -186,7 +184,7 @@ void EmbeddedGraph::pinchWith(EmbeddedGraph& other) {
     
     if(sharedPaths.size() == 0) {
         // Warn the user that no merging can happen.
-        std::cerr << "WARNING: No shared paths exist to merge on! No bases will be merged!" << std::endl;
+        std::cerr << "WARNING: No shared paths exist to merge on!" << std::endl;
     }
     
     for(std::string pathName : sharedPaths) {
@@ -513,7 +511,7 @@ std::list<vg::Mapping> EmbeddedGraph::reverse_path(std::list<vg::Mapping> path) 
 }
 
 void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
-    vg::Index& theirIndex, size_t kmer_size, size_t edge_max) {
+    vg::Index& theirIndex, size_t kmerSize, size_t edgeMax) {
     
     // Actually good strategy:
     // Loop through the kmer instances in our index
@@ -538,7 +536,7 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
     std::mutex theirUniqueKmerPathsMutex;
     
     #ifdef debug
-        std::cerr << "Looking for kmers of size " << kmer_size << std::endl;
+        std::cerr << "Looking for kmers of size " << kmerSize << "." << std::endl;
     #endif
     
     auto observeKmer = [this](std::string& kmer,
@@ -571,7 +569,7 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
         
 #ifdef debug
         #pragma omp critical(cerr)
-        std::cerr << "Kmer " << kmer << " occurs " << kmerCount << " times in " << getName() << std::endl;
+        std::cerr << "Kmer " << kmer << " occurs " << kmerCount << " times in " << getName() << "." << std::endl;
 #endif
         
         if(kmerCount > 1) {
@@ -604,7 +602,7 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
                 uniqueKmerPaths[kmer] = minimalPath;
 #ifdef debug
                 #pragma omp critical(cerr)
-                std::cerr << "Found unique kmer " << kmer << std::endl;
+                std::cerr << "Found unique kmer " << kmer << "." << std::endl;
 #endif
             } else {
                 // The reverse complement is in but this kmer isn't.
@@ -625,7 +623,7 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
                     
 #ifdef debug
                     #pragma omp critical(cerr)
-                    std::cerr << "Formerly unique kmer " << kmer << " is now RC-duplicated" << std::endl;
+                    std::cerr << "Formerly unique kmer " << kmer << " is now RC-duplicated." << std::endl;
 #endif
                     
                 }
@@ -654,7 +652,7 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
                 
 #ifdef debug
                     #pragma omp critical(cerr)
-                    std::cerr << "Formerly unique kmer " << kmer << " is now duplicated" << std::endl;
+                    std::cerr << "Formerly unique kmer " << kmer << " is now duplicated." << std::endl;
 #endif
             }
         }
@@ -664,7 +662,7 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
     };
     
     // Enumerate kmers in one graph with for_each_kmer_parallel
-    graph.for_each_kmer_parallel(kmer_size, edge_max, [&](std::string& kmer,
+    graph.for_each_kmer_parallel(kmerSize, edgeMax, [&](std::string& kmer,
         std::list<vg::NodeTraversal>::iterator occurrence, int offset,
         std::list<vg::NodeTraversal>& path, vg::VG& kmer_graph) {
         
@@ -677,7 +675,7 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
     }, true, false); // Accept duplicate kmers, but not kmers with negative offsets.
     
     // Do the same for the other graph
-    other.graph.for_each_kmer_parallel(kmer_size, edge_max, [&](std::string& kmer,
+    other.graph.for_each_kmer_parallel(kmerSize, edgeMax, [&](std::string& kmer,
         std::list<vg::NodeTraversal>::iterator occurrence, int offset,
         std::list<vg::NodeTraversal>& path, vg::VG& kmer_graph) {
         
@@ -685,6 +683,9 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
         observeKmer(kmer, occurrence, offset, path, theirIndex, theirUniqueKmerPaths, theirUniqueKmerPathsMutex);
         
     }, true, false); // Accept duplicate kmers, but not kmers with negative offsets.
+    
+    // How many shared unique kmers do we find?
+    size_t sharedUniqueKmers = 0;
     
     // Then find the paths for corresponding kmers and merge on them.
     for(auto& kv : ourUniqueKmerPaths) {
@@ -711,8 +712,9 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
             pinchOnPaths(kv.second, other, theirPath);
             
 #ifdef debug
-            std::cerr << "Mutually unique kmer " << kv.first << " pinched on" << std::endl;
+            std::cerr << "Mutually unique kmer " << kv.first << " pinched on." << std::endl;
 #endif
+            sharedUniqueKmers++;
             
         } else if(theirReverseMatch != theirUniqueKmerPaths.end()) {
             // If the other graph has it reverse complemented, find out where
@@ -730,11 +732,19 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
             pinchOnPaths(kv.second, other, theirPath);
             
 #ifdef debug
-            std::cerr << "RC-mutually unique kmer " << kv.first << " pinched on" << std::endl;
+            std::cerr << "RC-mutually unique kmer " << kv.first << " pinched on." << std::endl;
 #endif
+            sharedUniqueKmers++;
             
         }
         
+    }
+    
+    // Report to the user what happened.
+    std::cerr << "Pinched on " << sharedUniqueKmers << " shared unique " << kmerSize << "-mers." << std::endl;
+    
+    if(sharedUniqueKmers == 0) {
+        std::cerr << "WARNING: no kmer pinches performed!" << std::endl;
     }
 }
     

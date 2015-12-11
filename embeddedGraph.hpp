@@ -39,11 +39,11 @@ public:
     
     /**
      * Merge this embedded graph with another on shared unique kmers. Takes two
-     * indexes. kmer_size gives the length of kmers to look for/generate, and
-     * edge_max gives the max number of choice points in a kmer's kpath.
+     * indexes. kmerSize gives the length of kmers to look for/generate, and
+     * edgeMax gives the max number of choice points in a kmer's kpath.
      */
     void pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other, vg::Index& theirIndex,
-        size_t kmer_size=1, size_t edge_max=0);
+        size_t kmerSize=1, size_t edgeMax=0);
     
     /**
      * Compute whether this graph is covered by paths, or whether any nodes

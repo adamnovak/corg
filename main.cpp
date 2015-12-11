@@ -231,15 +231,15 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    size_t kmer_size = 0;
-    size_t edge_max = 0;
+    size_t kmerSize = 0;
+    size_t edgeMax = 0;
     
     optind = 1; // Start at first real argument
     bool optionsRemaining = true;
     while(optionsRemaining) {
         static struct option longOptions[] = {
             {"kmer-size", required_argument, 0, 'k'},
-            {"edge_max", required_argument, 0, 'e'},
+            {"edgeMax", required_argument, 0, 'e'},
             {"help", no_argument, 0, 'h'},
             {0, 0, 0, 0}
         };
@@ -252,10 +252,10 @@ int main(int argc, char** argv) {
             optionsRemaining = false;
             break;
         case 'k': // Set the kmer size
-            kmer_size = atol(optarg);
+            kmerSize = atol(optarg);
             break;
         case 'e': // Set the edge max parameter for kmer enumeration
-            edge_max = atol(optarg);
+            edgeMax = atol(optarg);
             break;
         case 'h': // When the user asks for help
         case '?': // When we get options we can't parse
@@ -302,7 +302,7 @@ int main(int argc, char** argv) {
     vg::Index* index1 = nullptr;
     vg::Index* index2 = nullptr;
     
-    if(kmer_size) {
+    if(kmerSize) {
         // Only go looking for indexes if we want to merge on kmers.
         index1 = new vg::Index();
         index1->open_read_only(indexDir1);
@@ -344,11 +344,13 @@ int main(int argc, char** argv) {
     }
     
     // Trace the paths and merge the embedded graphs.
+    std::cerr << "Pinching graphs on shared paths..." << std::endl;
     embedding1.pinchWith(embedding2);
     
-    if(kmer_size > 0) {
+    if(kmerSize > 0) {
         // Merge on kmers that are unique in both graphs.
-        embedding1.pinchOnKmers(*index1, embedding2, *index2, kmer_size, edge_max);
+        std::cerr << "Pinching graphs on shared " << kmerSize << "-mers..." << std::endl;
+        embedding1.pinchOnKmers(*index1, embedding2, *index2, kmerSize, edgeMax);
     }
     
     // Fix trivial joins so we don't produce more vg nodes than we really need to.
