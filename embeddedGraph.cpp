@@ -694,9 +694,13 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
             continue;
         }
         
-        if(theirUniqueKmerPaths.count(kv.first)) {
+        // Look up the forward and reverse versions
+        auto theirMatch = theirUniqueKmerPaths.find(kv.first);
+        auto theirReverseMatch = theirUniqueKmerPaths.find(vg::reverse_complement(kv.first));
+        
+        if(theirMatch != theirUniqueKmerPaths.end()) {
             // If the other graph has it, find out where
-            auto& theirPath = theirUniqueKmerPaths.at(kv.first);
+            auto& theirPath = (*theirMatch).second;
             
             if(theirPath.empty()) {
                 // This was really duplicated
@@ -710,19 +714,20 @@ void EmbeddedGraph::pinchOnKmers(vg::Index& ourIndex, EmbeddedGraph& other,
             std::cerr << "Mutually unique kmer " << kv.first << " pinched on" << std::endl;
 #endif
             
-        } else if(theirUniqueKmerPaths.count(vg::reverse_complement(kv.first))) {
+        } else if(theirReverseMatch != theirUniqueKmerPaths.end()) {
             // If the other graph has it reverse complemented, find out where
-            auto& theirPath = theirUniqueKmerPaths.at(kv.first);
+            auto& theirReversePath = (*theirReverseMatch).second;
             
-            if(theirPath.empty()) {
+            if(theirReversePath.empty()) {
                 // This was really duplicated
                 continue;
             }
             
-            auto theirPathRev = other.reverse_path(theirPath);
+            // Flip it to be forward relative to us.
+            auto theirPath = other.reverse_path(theirReversePath);
             
-            // Merge on the paths (ours forward, theirs reversed)
-            pinchOnPaths(kv.second, other, theirPathRev);
+            // Merge on the paths
+            pinchOnPaths(kv.second, other, theirPath);
             
 #ifdef debug
             std::cerr << "RC-mutually unique kmer " << kv.first << " pinched on" << std::endl;
