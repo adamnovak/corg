@@ -361,7 +361,7 @@ void EmbeddedGraph::pinchOnPaths(std::list<vg::Mapping>& path, EmbeddedGraph& ot
         
 }
 
-std::list<vg::Mapping>&& EmbeddedGraph::makeMinimalPath(
+std::list<vg::Mapping> EmbeddedGraph::makeMinimalPath(
     std::string& kmer, std::list<vg::NodeTraversal>::iterator occurrence,
     int offset, std::list<vg::NodeTraversal>& path) {
 
@@ -432,7 +432,7 @@ std::list<vg::Mapping>&& EmbeddedGraph::makeMinimalPath(
     
     // Spit back the minimal path we have constructed, with only the Mappings
     // covering the actual kmer sequence.
-    return std::move(minimalPath);
+    return minimalPath;
 
 }
 

@@ -82,7 +82,7 @@ protected:
      * Turn a kmer that starts at a certain position along a kpath into a list
      * of Mappings covering only the bases in the kmer.
      */
-    static std::list<vg::Mapping>&& makeMinimalPath(std::string& kmer,
+    static std::list<vg::Mapping> makeMinimalPath(std::string& kmer,
         std::list<vg::NodeTraversal>::iterator occurrence, int offset,
         std::list<vg::NodeTraversal>& path);
         
