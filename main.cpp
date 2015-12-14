@@ -220,7 +220,8 @@ void help_main(char** argv) {
         << "options:" << std::endl
         << "    -h, --help          print this help message" << std::endl
         << "    -k, --kmer-size N   join graphs on mutually unique kmers of size N" << std::endl
-        << "    -e, --edge-max N    exclude k-paths which have N or more choice points" << std::endl;
+        << "    -e, --edge-max N    exclude k-paths which have N or more choice points" << std::endl
+        << "    -t, --threads N     number of threads to use" << std::endl;
 }
 
 int main(int argc, char** argv) {
@@ -240,13 +241,14 @@ int main(int argc, char** argv) {
         static struct option longOptions[] = {
             {"kmer-size", required_argument, 0, 'k'},
             {"edgeMax", required_argument, 0, 'e'},
+            {"threads", required_argument, 0, 't'},
             {"help", no_argument, 0, 'h'},
             {0, 0, 0, 0}
         };
 
         int optionIndex = 0;
 
-        switch(getopt_long(argc, argv, "k:e:h", longOptions, &optionIndex)) {
+        switch(getopt_long(argc, argv, "k:e:t:h", longOptions, &optionIndex)) {
         // Option value is in global optarg
         case -1:
             optionsRemaining = false;
@@ -256,6 +258,9 @@ int main(int argc, char** argv) {
             break;
         case 'e': // Set the edge max parameter for kmer enumeration
             edgeMax = atol(optarg);
+            break;
+        case 't': // Set the openmp threads
+            omp_set_num_threads(atoi(optarg));
             break;
         case 'h': // When the user asks for help
         case '?': // When we get options we can't parse
