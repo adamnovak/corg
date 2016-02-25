@@ -6,4 +6,4 @@
 	url = https://github.com/benedictpaten/pinchesAndCacti.git
 [submodule "ekg/vg"]
 	path = ekg/vg
-	url = https://github.com/ekg/vg.git
+	url = https://github.com/adamnovak/vg.git
