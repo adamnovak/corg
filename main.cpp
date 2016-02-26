@@ -221,6 +221,7 @@ void help_main(char** argv) {
         << "    -h, --help          print this help message" << std::endl
         << "    -k, --kmer-size N   join graphs on mutually unique kmers of size N" << std::endl
         << "    -e, --edge-max N    exclude k-paths which have N or more choice points" << std::endl
+        << "    -o, --kmers-only    merge only on kmers, not on shared paths" << std::endl
         << "    -t, --threads N     number of threads to use" << std::endl;
 }
 
@@ -235,12 +236,16 @@ int main(int argc, char** argv) {
     size_t kmerSize = 0;
     size_t edgeMax = 0;
     
+    // Should we only merge on kmers and skip paths?
+    bool kmersOnly = false;
+    
     optind = 1; // Start at first real argument
     bool optionsRemaining = true;
     while(optionsRemaining) {
         static struct option longOptions[] = {
             {"kmer-size", required_argument, 0, 'k'},
-            {"edgeMax", required_argument, 0, 'e'},
+            {"edge-max", required_argument, 0, 'e'},
+            {"kmers-only", no_argument, 0, 'o'},
             {"threads", required_argument, 0, 't'},
             {"help", no_argument, 0, 'h'},
             {0, 0, 0, 0}
@@ -258,6 +263,9 @@ int main(int argc, char** argv) {
             break;
         case 'e': // Set the edge max parameter for kmer enumeration
             edgeMax = atol(optarg);
+            break;
+        case 'o': // Only merge on kmers
+            kmersOnly = true;
             break;
         case 't': // Set the openmp threads
             omp_set_num_threads(atoi(optarg));
@@ -279,6 +287,11 @@ int main(int argc, char** argv) {
         // Print the help
         help_main(argv);
         return 1;
+    }
+    
+    if(kmersOnly && kmerSize == 0) {
+        // We need a kmer size to use kmers
+        throw std::runtime_error("Can't merge only on kmers with no kmer size");
     }
     
     // Pull out the VG file names
@@ -340,17 +353,21 @@ int main(int argc, char** argv) {
     coregraph::EmbeddedGraph embedding1(vg1, threadSet, threadSequences, getId, vgFile1);
     coregraph::EmbeddedGraph embedding2(vg2, threadSet, threadSequences, getId, vgFile2);
     
-    // Complain if any of the graphs is not completely covered by paths
-    if(!embedding1.isCoveredByPaths()) {
-        std::cerr << "WARNING: " << embedding1.getName() << " contains nodes with no paths!" << std::endl;
-    }
-    if(!embedding2.isCoveredByPaths()) {
-        std::cerr << "WARNING: " << embedding2.getName() << " contains nodes with no paths!" << std::endl;
-    }
+    if(!kmersOnly) {
+        // We want to merge on shared paths in addition to kmers
     
-    // Trace the paths and merge the embedded graphs.
-    std::cerr << "Pinching graphs on shared paths..." << std::endl;
-    embedding1.pinchWith(embedding2);
+        // Complain if any of the graphs is not completely covered by paths
+        if(!embedding1.isCoveredByPaths()) {
+            std::cerr << "WARNING: " << embedding1.getName() << " contains nodes with no paths!" << std::endl;
+        }
+        if(!embedding2.isCoveredByPaths()) {
+            std::cerr << "WARNING: " << embedding2.getName() << " contains nodes with no paths!" << std::endl;
+        }
+        
+        // Trace the paths and merge the embedded graphs.
+        std::cerr << "Pinching graphs on shared paths..." << std::endl;
+        embedding1.pinchWith(embedding2);
+    }
     
     if(kmerSize > 0) {
         // Merge on kmers that are unique in both graphs.
