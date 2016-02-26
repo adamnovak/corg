@@ -38,7 +38,7 @@ $(LIBVG):
 	cd ekg/vg && $(MAKE) libvg.a
 
 $(LIBXG): $(LIBVG)
-	cd ekg/vg && $(MAKE) xg/libxg.a
+	cd ekg/vg && $(MAKE) xg/libxg.a && cd ../.. && touch $(LIBXG)
 
 # This builds out to the sonLib lib directory for some reason
 $(LIBPINCHESANDCACTI): $(LIBSONLIB)
